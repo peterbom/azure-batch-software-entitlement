@@ -399,5 +399,24 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Common
 
             return subject.With(value).Map((s, v) => v ? applyConfiguration(s) : s);
         }
+
+        public static Errorable<TNew> Then<TOld, TNew>(
+            this Errorable<TOld> errorable,
+            Func<TOld, Errorable<TNew>> whenSuccessful)
+        {
+            if (errorable == null)
+            {
+                throw new ArgumentNullException(nameof(errorable));
+            }
+
+            if (whenSuccessful == null)
+            {
+                throw new ArgumentNullException(nameof(whenSuccessful));
+            }
+
+            return errorable.Match(
+                whenSuccessful: whenSuccessful,
+                whenFailure: errors => Errorable.Failure<TNew>(errors));
+        }
     }
 }

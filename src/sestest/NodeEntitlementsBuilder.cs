@@ -58,6 +58,7 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
                 .Configure(NotAfter(), (e, notAfter) => e.UntilInstant(notAfter))
                 .Configure(Audience(), (e, audience) => e.WithAudience(audience))
                 .Configure(Issuer(), (e, issuer) => e.WithIssuer(issuer))
+				.Configure(CpuCoreCount(), (e, coreCount) => e.WithCpuCoreCount(coreCount))
                 .ConfigureAll(Addresses(), (e, address) => e.AddIpAddress(address))
                 .ConfigureAll(Applications(), (e, app) => e.AddApplication(app));
 
@@ -101,7 +102,7 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
         {
             if (string.IsNullOrEmpty(_commandLine.Audience))
             {
-                // if the audience does not specify an audience, we use a default value to "self-sign"
+                // if the user does not specify an audience, we use a default value to "self-sign"
                 return Errorable.Success(Claims.DefaultAudience);
             }
 
@@ -112,11 +113,17 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
         {
             if (string.IsNullOrEmpty(_commandLine.Issuer))
             {
-                // if the audience does not specify an issuer, we use a default value to "self-sign"
+                // if the user does not specify an issuer, we use a default value to "self-sign"
                 return Errorable.Success(Claims.DefaultIssuer);
             }
 
             return Errorable.Success(_commandLine.Issuer);
+        }
+
+        private Errorable<int> CpuCoreCount()
+        {
+            // if the user does not specify a cpu core count, we default to the number of logical cores on the current machine
+            return Errorable.Success(_commandLine.CpuCoreCount ?? Environment.ProcessorCount);
         }
 
         private IEnumerable<Errorable<IPAddress>> Addresses()

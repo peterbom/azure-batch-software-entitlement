@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Net;
 using FluentAssertions;
 using Xunit;
@@ -203,6 +203,16 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
             {
                 var entitlement = _emptyEntitlement.WithAudience(_audience);
                 entitlement.Audience.Should().Be(_audience);
+            }
+        }
+
+        public class WithCpuCoreCount : NodeEntitlementsTests
+        {
+            [Fact]
+            public void GivenNumber_ModifiesConfiguration()
+            {
+                var entitlement = _emptyEntitlement.WithCpuCoreCount(8);
+                entitlement.CpuCoreCount.Should().Be(8);
             }
         }
     }

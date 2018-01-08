@@ -1,4 +1,4 @@
-﻿namespace Microsoft.Azure.Batch.SoftwareEntitlement.Common
+namespace Microsoft.Azure.Batch.SoftwareEntitlement.Common
 {
     /// <summary>
     /// A request for a software entitlement
@@ -15,5 +15,15 @@
         /// Unique identifier for the application for which an entitlement is sought
         /// </summary>
         public string ApplicationId { get; set; }
+
+        /// <summary>
+        /// A unique identifier for the host machine
+        /// </summary>
+        public string HostId { get; set; }
+
+        /// <summary>
+        /// The number of CPU cores detected on the host machine, or null if no value was supplied
+        /// </summary>
+        public int? Cores { get; set; }
     }
 }

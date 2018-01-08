@@ -18,6 +18,7 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Server.Controllers
 
         private readonly ILogger _logger;
         private readonly IApplicationLifetime _lifetime;
+        private readonly EntitlementStore _entitlementStore;
 
         // Verifier used to check tokens
         private readonly TokenVerifier _verifier;
@@ -31,11 +32,16 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Server.Controllers
         /// <param name="serverOptions">Options to use when handling requests.</param>
         /// <param name="logger">Reference to our logger for diagnostics.</param>
         /// <param name="lifetime">Lifetime instance to allow us to automatically shut down if requested.</param>
-        public SoftwareEntitlementsController(ServerOptions serverOptions, ILogger logger, IApplicationLifetime lifetime)
+        public SoftwareEntitlementsController(
+            ServerOptions serverOptions,
+            ILogger logger,
+            IApplicationLifetime lifetime,
+            EntitlementStore entitlementStore)
         {
             _serverOptions = serverOptions;
             _logger = logger;
             _lifetime = lifetime;
+            _entitlementStore = entitlementStore;
 
             if (_serverOptions.SigningKey != null)
             {
@@ -84,12 +90,36 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Server.Controllers
                 var remoteAddress = HttpContext.Connection.RemoteIpAddress;
                 _logger.LogDebug("Remote Address: {Address}", remoteAddress);
 
+                if (entitlementRequest.HostId == null && ApiRequiresHostId(apiVersion))
+                {
+                    return CreateMissingHostIdError();
+                }
+
+                if (!entitlementRequest.Cores.HasValue && ApiRequiresCpuCoreCount(apiVersion))
+                {
+                    return CreateMissingCpuCoreCountError();
+                }
+
                 Errorable<NodeEntitlements> verificationResult = _verifier.Verify(
                     entitlementRequest.Token,
                     _serverOptions.Audience,
                     _serverOptions.Issuer,
                     entitlementRequest.ApplicationId,
-                    remoteAddress);
+                    remoteAddress,
+                    entitlementRequest.Cores);
+
+                // Check the host ID from the request against the entitlement ID we've just
+                // extracted from the token.
+                verificationResult = verificationResult.Then(entitlement =>
+                {
+                    var allowed =
+                        !ApiRequiresHostId(apiVersion) ||
+                        _entitlementStore.StoreAndCheck(entitlement.Identifier, entitlementRequest.HostId);
+
+                    return allowed
+                        ? Errorable.Success(entitlement)
+                        : Errorable.Failure<NodeEntitlements>($"Host {entitlementRequest.HostId} is not allowed for entitlement {entitlement.Identifier}");
+                });
 
                 return verificationResult.Match(
                     whenSuccessful: entitlement => CreateEntitlementApprovedResponse(apiVersion, entitlement),
@@ -154,6 +184,32 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Server.Controllers
             return StatusCode(400, error);
         }
 
+        private ObjectResult CreateMissingHostIdError()
+        {
+            _logger.LogError("No hostId specified");
+
+            var error = new SoftwareEntitlementFailureResponse
+            {
+                Code = "EntitlementDenied",
+                Message = new ErrorMessage("Missing hostId value from software entitlement request.")
+            };
+
+            return StatusCode(400, error);
+        }
+
+        private ObjectResult CreateMissingCpuCoreCountError()
+        {
+            _logger.LogError("No cores specified");
+
+            var error = new SoftwareEntitlementFailureResponse
+            {
+                Code = "EntitlementDenied",
+                Message = new ErrorMessage("Missing cores value from software entitlement request.")
+            };
+
+            return StatusCode(400, error);
+        }
+
         private ObjectResult CreateInvalidApiVersionError(SoftwareEntitlementRequest entitlementRequest, string apiVersion)
         {
             _logger.LogError(
@@ -187,6 +243,16 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Server.Controllers
             
             return apiVersion.Equals(ApiVersion201705, StringComparison.Ordinal)
                    || apiVersion.Equals(ApiVersion201709, StringComparison.Ordinal);
+        }
+
+        private bool ApiRequiresHostId(string apiVersion)
+        {
+            return string.Equals(apiVersion, ApiVersion201709, StringComparison.Ordinal);
+        }
+
+        private bool ApiRequiresCpuCoreCount(string apiVersion)
+        {
+            return string.Equals(apiVersion, ApiVersion201709, StringComparison.Ordinal);
         }
 
         private bool ApiSupportsVirtualMachineId(string apiVersion)

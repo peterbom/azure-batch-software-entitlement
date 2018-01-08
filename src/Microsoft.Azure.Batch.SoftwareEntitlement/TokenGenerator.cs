@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
@@ -113,6 +113,11 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
                 _logger.LogDebug("Virtual machine Id: {VirtualMachineId}", entitlements.VirtualMachineId);
                 claims.Add(new Claim(Claims.VirtualMachineId, entitlements.VirtualMachineId));
             }
+
+            _logger.LogDebug("CPU core count: {CpuCoreCount}", entitlements.CpuCoreCount);
+            claims.Add(new Claim(Claims.CpuCoreCount, entitlements.CpuCoreCount.ToString()));
+
+            // TODO: Claims for BatchAccountId, PoolId, JobId, TaskId if required
 
             if (!string.IsNullOrEmpty(entitlements.Identifier))
             {

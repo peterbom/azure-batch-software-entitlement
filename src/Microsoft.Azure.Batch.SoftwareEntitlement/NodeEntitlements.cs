@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Immutable;
 using System.Net;
 
@@ -13,6 +13,11 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
         /// Gets the virtual machine identifier for the machine entitled to use the specified packages
         /// </summary>
         public string VirtualMachineId { get; }
+
+        /// <summary>
+        /// Gets the number of CPU cores configured for the selected VM SKU
+        /// </summary>
+        public int? CpuCoreCount { get; }
 
         /// <summary>
         /// The moment at which the entitlement was created
@@ -62,6 +67,7 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
             var now = DateTimeOffset.Now;
 
             VirtualMachineId = string.Empty;
+            CpuCoreCount = null;
             Created = now;
             NotBefore = now;
             NotAfter = now + TimeSpan.FromDays(7);
@@ -84,6 +90,16 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
             }
 
             return new NodeEntitlements(this, virtualMachineId: virtualMachineId);
+        }
+
+        /// <summary>
+        /// Specify the maximum number of CPU cores expected to be found on the machine
+        /// </summary>
+        /// <param name="cpuCoreCount">The number of CPU cores</param>
+        /// <returns>A new entitlement.</returns>
+        public NodeEntitlements WithCpuCoreCount(int cpuCoreCount)
+        {
+            return new NodeEntitlements(this, cpuCoreCount: cpuCoreCount);
         }
 
         /// <summary>
@@ -200,6 +216,7 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
             DateTimeOffset? notBefore = null,
             DateTimeOffset? notAfter = null,
             string virtualMachineId = null,
+            int? cpuCoreCount = null,
             ImmutableHashSet<string> applications = null,
             string identifier = null,
             ImmutableHashSet<IPAddress> addresses = null,
@@ -211,6 +228,7 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
             NotBefore = notBefore ?? original.NotBefore;
             NotAfter = notAfter ?? original.NotAfter;
             VirtualMachineId = virtualMachineId ?? original.VirtualMachineId;
+            CpuCoreCount = cpuCoreCount ?? original.CpuCoreCount;
             Applications = applications ?? original.Applications;
             Identifier = identifier ?? original.Identifier;
             IpAddresses = addresses ?? original.IpAddresses;
