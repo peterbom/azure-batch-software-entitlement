@@ -296,5 +296,24 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Common
                 async t => Errorable.Success(await transform(t.Item1, t.Item2, t.Item3, t.Item4)),
                 e => Task.FromResult(Errorable.Failure<R>(e)));
         }
+
+        public static Errorable<TNew> Then<TOld, TNew>(
+            this Errorable<TOld> errorable,
+            Func<TOld, Errorable<TNew>> whenSuccessful)
+        {
+            if (errorable == null)
+            {
+                throw new ArgumentNullException(nameof(errorable));
+            }
+
+            if (whenSuccessful == null)
+            {
+                throw new ArgumentNullException(nameof(whenSuccessful));
+            }
+
+            return errorable.Match(
+                whenSuccessful: whenSuccessful,
+                whenFailure: errors => Errorable.Failure<TNew>(errors));
+        }
     }
 }

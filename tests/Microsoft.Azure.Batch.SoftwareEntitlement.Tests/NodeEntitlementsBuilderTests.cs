@@ -270,6 +270,38 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
                 entitlement.HasValue.Should().BeFalse();
                 entitlement.Errors.Should().Contain(e => e.Contains("address"));
             }
+
+            [Fact]
+            public void WhenMultipleInvalidAddresses_ReturnsErrorForEach()
+            {
+                _commandLine.Addresses.Add("Not.An.IP.Address");
+                _commandLine.Addresses.Add("NotOneEither");
+                var entitlement = NodeEntitlementsBuilder.Build(_commandLine);
+                entitlement.HasValue.Should().BeFalse();
+                entitlement.Errors.Count.Should().Be(2);
+                entitlement.Errors.Should().Contain(e => e.Contains("Not.An.IP.Address"));
+                entitlement.Errors.Should().Contain(e => e.Contains("NotOneEither"));
+            }
+        }
+
+        public class MaxCoresProperty : NodeEntitlementsBuilderTests
+        {
+            [Fact]
+            public void WhenMissing_BuildReturnsLogicalCoreCount()
+            {
+                _commandLine.CpuCoreCount = null;
+                var result = NodeEntitlementsBuilder.Build(_commandLine);
+                result.Value.CpuCoreCount.Should().Be(Environment.ProcessorCount);
+            }
+
+            [Fact]
+            public void WhenValid_PropertyHasExpectedValue()
+            {
+                const int specifiedCpuCoreCount = 33;
+                _commandLine.CpuCoreCount = specifiedCpuCoreCount;
+                var result = NodeEntitlementsBuilder.Build(_commandLine);
+                result.Value.CpuCoreCount.Should().Be(specifiedCpuCoreCount);
+            }
         }
 
         public class IssuerProperty : NodeEntitlementsBuilderTests

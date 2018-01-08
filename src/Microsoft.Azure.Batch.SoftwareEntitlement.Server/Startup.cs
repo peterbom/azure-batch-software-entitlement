@@ -31,6 +31,7 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Server
         {
             services.AddMvc();
             services.TryAddSingleton<IHttpContextAccessor, HttpContextAccessor>();
+            services.TryAddSingleton<EntitlementStore>();
         }
 
         [SuppressMessage(

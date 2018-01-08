@@ -37,6 +37,10 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
         private readonly IPAddress _otherAddress = IPAddress.Parse("203.0.113.42");
         private readonly IPAddress _approvedAddress = IPAddress.Parse("203.0.113.45");
 
+        // CPU core counts
+        private readonly int? _cpuCoreCountUnspecified = null;
+        private readonly int _cpuCoreCountMax = 2;
+
         // Name for the approved entitlement
         private readonly string _entitlementIdentifer = "mystery-identifier";
 
@@ -112,6 +116,11 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
                 result = result.WithVirtualMachineId("virtual-machine-identifier");
             }
 
+            if (!creationOptions.HasFlag(EntitlementCreationOptions.OmitCpuCoreCount))
+            {
+                result = result.WithCpuCoreCount(_cpuCoreCountMax);
+            }
+
             return result;
         }
 
@@ -126,7 +135,8 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
             OmitIpAddress = 1,
             OmitIdentifier = 2,
             OmitApplication = 4,
-            OmitMachineId = 8
+            OmitMachineId = 8,
+            OmitCpuCoreCount = 16
         }
 
         public class ConfigurationCheck : TokenEnforcementTests
@@ -137,7 +147,7 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
             public void GivenValidEntitlement_ReturnsSuccess()
             {
                 var token = _generator.Generate(_validEntitlements);
-                var result = _verifier.Verify(token, _audience, _issuer, _contosoFinanceApp, _approvedAddress);
+                var result = _verifier.Verify(token, _audience, _issuer, _contosoFinanceApp, _approvedAddress, _cpuCoreCountUnspecified);
                 result.HasValue.Should().BeTrue();
             }
         }
@@ -152,7 +162,7 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
             public void GivenValidEntitlement_HasExpectedNotBefore()
             {
                 var token = _generator.Generate(_validEntitlements);
-                var result = _verifier.Verify(token, _audience, _issuer, _contosoFinanceApp, _approvedAddress);
+                var result = _verifier.Verify(token, _audience, _issuer, _contosoFinanceApp, _approvedAddress, _cpuCoreCountUnspecified);
                 result.HasValue.Should().BeTrue();
                 result.Value.NotBefore.Should().BeCloseTo(_validEntitlements.NotBefore, precision: 1000);
             }
@@ -161,7 +171,7 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
             public void GivenValidEntitlement_HasExpectedNotAfter()
             {
                 var token = _generator.Generate(_validEntitlements);
-                var result = _verifier.Verify(token, _audience, _issuer, _contosoFinanceApp, _approvedAddress);
+                var result = _verifier.Verify(token, _audience, _issuer, _contosoFinanceApp, _approvedAddress, _cpuCoreCountUnspecified);
                 result.HasValue.Should().BeTrue();
                 result.Value.NotAfter.Should().BeCloseTo(_validEntitlements.NotAfter, precision: 1000);
             }
@@ -173,7 +183,7 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
                     .FromInstant(_now - _oneWeek)
                     .UntilInstant(_now - _oneDay);
                 var token = _generator.Generate(entitlement);
-                var result = _verifier.Verify(token, _audience, _issuer, _contosoFinanceApp, _approvedAddress);
+                var result = _verifier.Verify(token, _audience, _issuer, _contosoFinanceApp, _approvedAddress, _cpuCoreCountUnspecified);
                 result.HasValue.Should().BeFalse();
                 result.Errors.Should().Contain(e => e.Contains("expired"));
             }
@@ -185,7 +195,7 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
                     .FromInstant(_now + _oneDay)
                     .UntilInstant(_now + _oneWeek);
                 var token = _generator.Generate(entitlement);
-                var result = _verifier.Verify(token, _audience, _issuer, _contosoFinanceApp, _approvedAddress);
+                var result = _verifier.Verify(token, _audience, _issuer, _contosoFinanceApp, _approvedAddress, _cpuCoreCountUnspecified);
                 result.HasValue.Should().BeFalse();
                 result.Errors.Should().Contain(e => e.Contains("will not be valid"));
             }
@@ -197,7 +207,7 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
             public void WhenIdentifierIncluded_IsReturnedByVerifier()
             {
                 var token = _generator.Generate(_validEntitlements);
-                var result = _verifier.Verify(token, _audience, _issuer, _contosoFinanceApp, _approvedAddress);
+                var result = _verifier.Verify(token, _audience, _issuer, _contosoFinanceApp, _approvedAddress, _cpuCoreCountUnspecified);
                 result.HasValue.Should().BeTrue();
                 result.Value.VirtualMachineId.Should().Be(_validEntitlements.VirtualMachineId);
             }
@@ -207,7 +217,7 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
             {
                 var entitlements = CreateEntitlements(EntitlementCreationOptions.OmitMachineId);
                 var token = _generator.Generate(entitlements);
-                var result = _verifier.Verify(token, _audience, _issuer, _contosoFinanceApp, _approvedAddress);
+                var result = _verifier.Verify(token, _audience, _issuer, _contosoFinanceApp, _approvedAddress, _cpuCoreCountUnspecified);
                 result.HasValue.Should().BeTrue();
                 result.Value.VirtualMachineId.Should().BeNullOrEmpty();
             }
@@ -219,7 +229,7 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
             public void WhenEntitlementContainsOnlyTheRequestedApplication_ReturnsExpectedApplication()
             {
                 var token = _generator.Generate(_validEntitlements);
-                var result = _verifier.Verify(token, _audience, _issuer, _contosoFinanceApp, _approvedAddress);
+                var result = _verifier.Verify(token, _audience, _issuer, _contosoFinanceApp, _approvedAddress, _cpuCoreCountUnspecified);
                 result.HasValue.Should().BeTrue();
                 result.Value.Applications.Should().Contain(_contosoFinanceApp);
             }
@@ -228,7 +238,7 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
             public void WhenEntitlementContainsOnlyADifferentApplication_ReturnsError()
             {
                 var token = _generator.Generate(_validEntitlements);
-                var result = _verifier.Verify(token, _audience, _issuer, _contosoITApp, _approvedAddress);
+                var result = _verifier.Verify(token, _audience, _issuer, _contosoITApp, _approvedAddress, _cpuCoreCountUnspecified);
                 result.HasValue.Should().BeFalse();
                 result.Errors.Should().Contain(e => e.Contains(_contosoITApp));
             }
@@ -237,7 +247,7 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
             public void WhenEntitlementContainsMultipleApplicationsButNotTheRequestedApplication_ReturnsError()
             {
                 var token = _generator.Generate(_validEntitlements);
-                var result = _verifier.Verify(token, _audience, _issuer, _contosoITApp, _approvedAddress);
+                var result = _verifier.Verify(token, _audience, _issuer, _contosoITApp, _approvedAddress, _cpuCoreCountUnspecified);
                 result.HasValue.Should().BeFalse();
                 result.Errors.Should().NotBeEmpty();
             }
@@ -249,7 +259,7 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
                     _validEntitlements.AddApplication(_contosoHRApp)
                         .AddApplication(_contosoITApp);
                 var token = _generator.Generate(entitlement);
-                var result = _verifier.Verify(token, _audience, _issuer, _contosoHRApp, _approvedAddress);
+                var result = _verifier.Verify(token, _audience, _issuer, _contosoHRApp, _approvedAddress, _cpuCoreCountUnspecified);
                 result.HasValue.Should().BeTrue();
                 result.Value.Applications.Should().Contain(_contosoHRApp);
             }
@@ -259,7 +269,7 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
             {
                 var entitlements = CreateEntitlements(EntitlementCreationOptions.OmitApplication);
                 var token = _generator.Generate(entitlements);
-                var result = _verifier.Verify(token, _audience, _issuer, _contosoITApp, _approvedAddress);
+                var result = _verifier.Verify(token, _audience, _issuer, _contosoITApp, _approvedAddress, _cpuCoreCountUnspecified);
                 result.HasValue.Should().BeFalse();
                 result.Errors.Should().Contain(e => e.Contains(_contosoITApp));
             }
@@ -271,7 +281,7 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
             public void WhenEntitlementContainsIp_ReturnsIpAddress()
             {
                 var token = _generator.Generate(_validEntitlements);
-                var result = _verifier.Verify(token, _audience, _issuer, _contosoFinanceApp, _approvedAddress);
+                var result = _verifier.Verify(token, _audience, _issuer, _contosoFinanceApp, _approvedAddress, _cpuCoreCountUnspecified);
                 result.HasValue.Should().BeTrue();
                 result.Value.IpAddresses.Should().Contain(_approvedAddress);
             }
@@ -282,7 +292,7 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
                 var entitlements = CreateEntitlements(EntitlementCreationOptions.OmitIpAddress)
                     .AddIpAddress(_otherAddress);
                 var token = _generator.Generate(entitlements);
-                var result = _verifier.Verify(token, _audience, _issuer, _contosoFinanceApp, _approvedAddress);
+                var result = _verifier.Verify(token, _audience, _issuer, _contosoFinanceApp, _approvedAddress, _cpuCoreCountUnspecified);
                 result.HasValue.Should().BeFalse();
                 result.Errors.Should().NotBeEmpty();
             }
@@ -292,9 +302,51 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
             {
                 var entitlements = CreateEntitlements(EntitlementCreationOptions.OmitIpAddress);
                 var token = _generator.Generate(entitlements);
-                var result = _verifier.Verify(token, _audience, _issuer, _contosoFinanceApp, _approvedAddress);
+                var result = _verifier.Verify(token, _audience, _issuer, _contosoFinanceApp, _approvedAddress, _cpuCoreCountUnspecified);
                 result.HasValue.Should().BeFalse();
                 result.Errors.Should().Contain(e => e.Contains(_approvedAddress.ToString()));
+            }
+        }
+
+        public class CpuCoreCountProperty : TokenEnforcementTests
+        {
+            [Fact]
+            public void WhenCoreCountIsLessThanEntitlement_ReturnsSpecifiedCoreCount()
+            {
+                var specifiedCpuCoreCount = _cpuCoreCountMax - 1;
+                var token = _generator.Generate(_validEntitlements);
+                var result = _verifier.Verify(token, _audience, _issuer, _contosoFinanceApp, _approvedAddress, specifiedCpuCoreCount);
+                result.HasValue.Should().BeTrue();
+                result.Value.CpuCoreCount.Should().Be(specifiedCpuCoreCount);
+            }
+
+            [Fact]
+            public void WhenCoreCountEqualsEntitlement_ReturnsSpecifiedCoreCount()
+            {
+                var specifiedCpuCoreCount = _cpuCoreCountMax;
+                var token = _generator.Generate(_validEntitlements);
+                var result = _verifier.Verify(token, _audience, _issuer, _contosoFinanceApp, _approvedAddress, specifiedCpuCoreCount);
+                result.HasValue.Should().BeTrue();
+                result.Value.CpuCoreCount.Should().Be(specifiedCpuCoreCount);
+            }
+
+            [Fact]
+            public void WhenCoreCountExceedsEntitlement_ReturnsError()
+            {
+                var token = _generator.Generate(_validEntitlements);
+                var result = _verifier.Verify(token, _audience, _issuer, _contosoFinanceApp, _approvedAddress, _cpuCoreCountMax + 1);
+                result.HasValue.Should().BeFalse();
+                result.Errors.Should().NotBeEmpty();
+            }
+
+            [Fact]
+            public void WhenEntitlementHasNoCoreCount_ReturnsError()
+            {
+                var entitlements = CreateEntitlements(EntitlementCreationOptions.OmitCpuCoreCount);
+                var token = _generator.Generate(entitlements);
+                var result = _verifier.Verify(token, _audience, _issuer, _contosoFinanceApp, _approvedAddress, _cpuCoreCountUnspecified);
+                result.HasValue.Should().BeFalse();
+                result.Errors.Should().NotBeEmpty();
             }
         }
 
@@ -304,7 +356,7 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
             public void WhenValidEntitlementSpecifiesIdentifier_ReturnsIdentifier()
             {
                 var token = _generator.Generate(_validEntitlements);
-                var result = _verifier.Verify(token, _audience, _issuer, _contosoFinanceApp, _approvedAddress);
+                var result = _verifier.Verify(token, _audience, _issuer, _contosoFinanceApp, _approvedAddress, _cpuCoreCountUnspecified);
                 result.HasValue.Should().BeTrue();
                 result.Value.Identifier.Should().Be(_entitlementIdentifer);
             }
@@ -314,7 +366,7 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
             {
                 var entitlements = CreateEntitlements(EntitlementCreationOptions.OmitIdentifier);
                 var token = _generator.Generate(entitlements);
-                var result = _verifier.Verify(token, _audience, _issuer, _contosoFinanceApp, _approvedAddress);
+                var result = _verifier.Verify(token, _audience, _issuer, _contosoFinanceApp, _approvedAddress, _cpuCoreCountUnspecified);
                 result.HasValue.Should().BeFalse();
                 result.Errors.Should().Contain(e => e.Contains("identifier"));
             }
@@ -328,7 +380,7 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
                 var entitlements = CreateEntitlements()
                     .WithAudience("http://not.the.audience.you.expected");
                 var token = _generator.Generate(entitlements);
-                var result = _verifier.Verify(token, _audience, _issuer, _contosoFinanceApp, _approvedAddress);
+                var result = _verifier.Verify(token, _audience, _issuer, _contosoFinanceApp, _approvedAddress, _cpuCoreCountUnspecified);
                 result.HasValue.Should().BeFalse();
                 result.Errors.Should().Contain(e => e.Contains("audience"));
             }
@@ -355,7 +407,7 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
             public void WhenEntitlementContainsOnlyTheRequestedApplication_ReturnsExpectedApplication()
             {
                 var token = _generatorWithNoSigningKey.Generate(_validEntitlements);
-                var result = _verifierWithNoSigningKey.Verify(token, _audience, _issuer, _contosoFinanceApp, _approvedAddress);
+                var result = _verifierWithNoSigningKey.Verify(token, _audience, _issuer, _contosoFinanceApp, _approvedAddress, _cpuCoreCountUnspecified);
                 result.HasValue.Should().BeTrue();
                 result.Value.Applications.Should().Contain(_contosoFinanceApp);
             }
@@ -382,7 +434,7 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
             public void WhenEntitlementContainsOnlyTheRequestedApplication_ReturnsExpectedApplication()
             {
                 var token = _generatorWithNoEncryptionKey.Generate(_validEntitlements);
-                var result = _verifierWithNoEncryptionKey.Verify(token, _audience, _issuer, _contosoFinanceApp, _approvedAddress);
+                var result = _verifierWithNoEncryptionKey.Verify(token, _audience, _issuer, _contosoFinanceApp, _approvedAddress, _cpuCoreCountUnspecified);
                 result.HasValue.Should().BeTrue();
                 result.Value.Applications.Should().Contain(_contosoFinanceApp);
             }
@@ -400,7 +452,7 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
                 var generator = new TokenGenerator(_nullLogger, signingCredentials, encryptingCredentials: null);
                 // Act
                 var token = generator.Generate(_validEntitlements);
-                var result = verifier.Verify(token, _audience, _issuer, _contosoFinanceApp, _approvedAddress);
+                var result = verifier.Verify(token, _audience, _issuer, _contosoFinanceApp, _approvedAddress, _cpuCoreCountUnspecified);
                 // Assert
                 result.Errors.Should().BeEmpty();
                 result.Value.Applications.Should().Contain(_contosoFinanceApp);
@@ -416,7 +468,7 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
                 var generator = new TokenGenerator(_nullLogger, signingCredentials: null, encryptingCredentials: encryptingCredentials);
                 // Act
                 var token = generator.Generate(_validEntitlements);
-                var result = verifier.Verify(token, _audience, _issuer, _contosoFinanceApp, _approvedAddress);
+                var result = verifier.Verify(token, _audience, _issuer, _contosoFinanceApp, _approvedAddress, _cpuCoreCountUnspecified);
                 // Assert
                 result.Errors.Should().BeEmpty();
                 result.Value.Applications.Should().Contain(_contosoFinanceApp);

@@ -37,5 +37,8 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
 
         [Option("issuer", HelpText = "[Internal] Issuer by whom the tokens are created (optional).")]
         public string Issuer { get; set; }
+
+        [Option("maxcores", HelpText = "The maximum number of CPU cores allowed on the machine entitled to execute the application(s) (defaults to the number of logical cores on the current machine).")]
+        public int? CpuCoreCount { get; set; }
     }
 }

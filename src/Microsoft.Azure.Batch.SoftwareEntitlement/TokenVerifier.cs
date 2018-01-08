@@ -75,6 +75,8 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
         /// <param name="expectedIssuer">The issuer who should have created the token.</param>
         /// <param name="application">The specific application id of the application </param>
         /// <param name="ipAddress">Address of the machine requesting token validation.</param>
+        /// <param name="cpuCoreCount">The number of CPU cores reported to be found by the application,
+        /// or null if that doesn't need to be verified.</param>
         /// <returns>Either a software entitlement describing the approved entitlement, or errors
         /// explaining why it wasn't approved.</returns>
         public Errorable<NodeEntitlements> Verify(
@@ -82,7 +84,8 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
             string expectedAudience,
             string expectedIssuer,
             string application,
-            IPAddress ipAddress)
+            IPAddress ipAddress,
+            int? cpuCoreCount)
         {
             var validationParameters = new TokenValidationParameters
             {
@@ -114,11 +117,18 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
                     return MachineNotEntitledError(ipAddress);
                 }
 
+                if (!VerifyCpuCoreCount(principal, cpuCoreCount))
+                {
+                    return CpuCoreAllowanceExceededError(cpuCoreCount);
+                }
+
                 var entitlementIdClaim = principal.FindFirst(Claims.EntitlementId);
                 if (entitlementIdClaim == null)
                 {
                     return IdentifierNotPresentError();
                 }
+
+                // TODO: Extraction of batchaccount, poolid, jobid and taskid claims if required.
 
                 var result = new NodeEntitlements()
                     .FromInstant(new DateTimeOffset(token.ValidFrom))
@@ -126,6 +136,11 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
                     .AddApplication(application)
                     .WithIdentifier(entitlementIdClaim.Value)
                     .AddIpAddress(ipAddress);
+
+                if (cpuCoreCount.HasValue)
+                {
+                    result = result.WithCpuCoreCount(cpuCoreCount.Value);
+                }
 
                 var virtualMachineIdClaim = principal.FindFirst(Claims.VirtualMachineId);
                 if (virtualMachineIdClaim != null)
@@ -208,6 +223,31 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
             return false;
         }
 
+        private bool VerifyCpuCoreCount(ClaimsPrincipal principal, int? cpuCoreCount)
+        {
+            // There should always be a CPU core count in the token, even though the
+            // particular version of the API we're using may not require it to be
+            // checked.
+            var cpuCoreCountClaim = principal.FindFirst(Claims.CpuCoreCount);
+            if (cpuCoreCountClaim == null || !int.TryParse(cpuCoreCountClaim.Value, out int maxCpuCoreCount))
+            {
+                return false;
+            }
+
+            if (!cpuCoreCount.HasValue)
+            {
+                // Checking whether we're *supposed* to have a value provided here is
+                // beyond the scope of this check. If no core count is supplied it's
+                // assumed we don't actually need to verify it (i.e. verification is
+                // successful).
+                return true;
+            }
+
+            // The supplied CPU core count is allowed to be less than the value in the
+            // claim.
+            return cpuCoreCount.Value <= maxCpuCoreCount;
+        }
+
         private static Errorable<NodeEntitlements> TokenNotYetValidError(DateTime notBefore)
         {
             var timestamp = notBefore.ToString(TimestampParser.ExpectedFormat);
@@ -242,6 +282,12 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
         {
             return Errorable.Failure<NodeEntitlements>(
                 "Entitlement identifier missing from entitlement token.");
+        }
+
+        private Errorable<NodeEntitlements> CpuCoreAllowanceExceededError(int? cpuCoreCount)
+        {
+            return Errorable.Failure<NodeEntitlements>(
+                $"Token does not grant entitlement for {cpuCoreCount?.ToString() ?? "any"} CPU cores.");
         }
     }
 }
