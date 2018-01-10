@@ -117,7 +117,29 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
             _logger.LogDebug("CPU core count: {CpuCoreCount}", entitlements.CpuCoreCount);
             claims.Add(new Claim(Claims.CpuCoreCount, entitlements.CpuCoreCount.ToString()));
 
-            // TODO: Claims for BatchAccountId, PoolId, JobId, TaskId if required
+            if (!string.IsNullOrEmpty(entitlements.BatchAccountId))
+            {
+                _logger.LogDebug("Batch Account Id: {BatchAccountId}", entitlements.BatchAccountId);
+                claims.Add(new Claim(Claims.BatchAccountId, entitlements.BatchAccountId));
+            }
+
+            if (!string.IsNullOrEmpty(entitlements.PoolId))
+            {
+                _logger.LogDebug("Pool Id: {PoolId}", entitlements.PoolId);
+                claims.Add(new Claim(Claims.PoolId, entitlements.PoolId));
+            }
+
+            if (!string.IsNullOrEmpty(entitlements.JobId))
+            {
+                _logger.LogDebug("Job Id: {JobId}", entitlements.JobId);
+                claims.Add(new Claim(Claims.JobId, entitlements.JobId));
+            }
+
+            if (!string.IsNullOrEmpty(entitlements.TaskId))
+            {
+                _logger.LogDebug("Task Id: {TaskId}", entitlements.TaskId);
+                claims.Add(new Claim(Claims.TaskId, entitlements.TaskId));
+            }
 
             if (!string.IsNullOrEmpty(entitlements.Identifier))
             {

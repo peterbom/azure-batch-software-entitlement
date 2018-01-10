@@ -20,11 +20,6 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
         public int? CpuCoreCount { get; }
 
         /// <summary>
-        /// The moment at which the entitlement was created
-        /// </summary>
-        public DateTimeOffset Created { get; }
-
-        /// <summary>
         /// The earliest moment at which the entitlement is active
         /// </summary>
         public DateTimeOffset NotBefore { get; }
@@ -50,6 +45,26 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
         public string Identifier { get; }
 
         /// <summary>
+        /// The unique identifier of the batch account that owns the pool
+        /// </summary>
+        public string BatchAccountId { get; }
+
+        /// <summary>
+        /// The unique identifier for the pool on which the application is expected to be running
+        /// </summary>
+        public string PoolId { get; }
+
+        /// <summary>
+        /// A unique identifier for the job within which the task is running
+        /// </summary>
+        public string JobId { get; }
+
+        /// <summary>
+        /// A unique identifier for the task itself
+        /// </summary>
+        public string TaskId { get; }
+
+        /// <summary>
         /// The audience for whom this entitlement is intended
         /// </summary>
         public string Audience { get; }
@@ -68,7 +83,6 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
 
             VirtualMachineId = string.Empty;
             CpuCoreCount = null;
-            Created = now;
             NotBefore = now;
             NotAfter = now + TimeSpan.FromDays(7);
             Applications = ImmutableHashSet<string>.Empty;
@@ -168,6 +182,66 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
         }
 
         /// <summary>
+        /// Specify the batch account ID with which the entitlement is associated
+        /// </summary>
+        /// <param name="batchAccountId">The batch account ID</param>
+        /// <returns>A new entitlement</returns>
+        public NodeEntitlements WithBatchAccountId(string batchAccountId)
+        {
+            if (string.IsNullOrEmpty(batchAccountId))
+            {
+                throw new ArgumentException("Expect to have a batch account ID", nameof(batchAccountId));
+            }
+
+            return new NodeEntitlements(this, batchAccountId: batchAccountId);
+        }
+
+        /// <summary>
+        /// Specify the pool ID with which the entitlement is associated
+        /// </summary>
+        /// <param name="poolId">The pool ID</param>
+        /// <returns>A new entitlement</returns>
+        public NodeEntitlements WithPoolId(string poolId)
+        {
+            if (string.IsNullOrEmpty(poolId))
+            {
+                throw new ArgumentException("Expect to have a pool ID", nameof(poolId));
+            }
+
+            return new NodeEntitlements(this, poolId: poolId);
+        }
+
+        /// <summary>
+        /// Specify the job ID with which the entitlement is associated
+        /// </summary>
+        /// <param name="jobId">The job ID</param>
+        /// <returns>A new entitlement</returns>
+        public NodeEntitlements WithJobId(string jobId)
+        {
+            if (string.IsNullOrEmpty(jobId))
+            {
+                throw new ArgumentException("Expect to have a job ID", nameof(jobId));
+            }
+
+            return new NodeEntitlements(this, jobId: jobId);
+        }
+
+        /// <summary>
+        /// Specify the task ID with which the entitlement is associated
+        /// </summary>
+        /// <param name="taskId">The task ID</param>
+        /// <returns>A new entitlement</returns>
+        public NodeEntitlements WithTaskId(string taskId)
+        {
+            if (string.IsNullOrEmpty(taskId))
+            {
+                throw new ArgumentException("Expect to have a task ID", nameof(taskId));
+            }
+
+            return new NodeEntitlements(this, taskId: taskId);
+        }
+
+        /// <summary>
         /// Specify the audience to use in the token 
         /// </summary>
         /// <param name="audience">The audience for the generated token.</param>
@@ -206,6 +280,11 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
         /// <param name="notBefore">Optionally specify a new value for <see cref="NotBefore"/>.</param>
         /// <param name="notAfter">Optionally specify a new value for <see cref="NotAfter"/>.</param>
         /// <param name="virtualMachineId">Optionally specify a new value for <see cref="VirtualMachineId"/>.</param>
+        /// <param name="cpuCoreCount">Optionally specify a new value for <see cref="CpuCoreCount"/></param>
+        /// <param name="batchAccountId">Optionally specify a new value for <see cref="BatchAccountId"/></param>
+        /// <param name="poolId">Optionally specify a new value for <see cref="PoolId"/></param>
+        /// <param name="jobId">Optionally specify a new value for <see cref="JobId"/></param>
+        /// <param name="taskId">Optionally specify a new value for <see cref="TaskId"/></param>
         /// <param name="applications">The set of applications entitled to run.</param>
         /// <param name="identifier">Identifier to use for this entitlement.</param>
         /// <param name="addresses">Addresses of the entitled machine.</param>
@@ -219,18 +298,24 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
             int? cpuCoreCount = null,
             ImmutableHashSet<string> applications = null,
             string identifier = null,
+            string batchAccountId = null,
+            string poolId = null,
+            string jobId = null,
+            string taskId = null,
             ImmutableHashSet<IPAddress> addresses = null,
             string audience = null,
             string issuer = null)
         {
-            Created = original.Created;
-
             NotBefore = notBefore ?? original.NotBefore;
             NotAfter = notAfter ?? original.NotAfter;
             VirtualMachineId = virtualMachineId ?? original.VirtualMachineId;
             CpuCoreCount = cpuCoreCount ?? original.CpuCoreCount;
             Applications = applications ?? original.Applications;
             Identifier = identifier ?? original.Identifier;
+            BatchAccountId = batchAccountId ?? original.BatchAccountId;
+            PoolId = poolId ?? original.PoolId;
+            JobId = jobId ?? original.JobId;
+            TaskId = taskId ?? original.TaskId;
             IpAddresses = addresses ?? original.IpAddresses;
             Audience = audience ?? original.Audience;
             Issuer = issuer ?? original.Issuer;

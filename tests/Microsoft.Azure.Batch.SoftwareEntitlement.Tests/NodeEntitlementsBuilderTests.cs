@@ -324,5 +324,85 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
                 result.Value.Issuer.Should().Be(_issuer);
             }
         }
+
+        public class BatchAccountIdProperty : NodeEntitlementsBuilderTests
+        {
+            [Fact]
+            public void WhenMissing_BuildReturnsNull()
+            {
+                _commandLine.BatchAccountId = null;
+                var result = NodeEntitlementsBuilder.Build(_commandLine);
+                result.Value.BatchAccountId.Should().BeNull();
+            }
+
+            [Fact]
+            public void WhenSpecified_PropertyHasExpectedValue()
+            {
+                const string specifiedBatchAccountId = "testbatchaccountid";
+                _commandLine.BatchAccountId = specifiedBatchAccountId;
+                var result = NodeEntitlementsBuilder.Build(_commandLine);
+                result.Value.BatchAccountId.Should().Be(specifiedBatchAccountId);
+            }
+        }
+
+        public class PoolIdProperty : NodeEntitlementsBuilderTests
+        {
+            [Fact]
+            public void WhenMissing_BuildReturnsNull()
+            {
+                _commandLine.PoolId = null;
+                var result = NodeEntitlementsBuilder.Build(_commandLine);
+                result.Value.PoolId.Should().BeNull();
+            }
+
+            [Fact]
+            public void WhenSpecified_PropertyHasExpectedValue()
+            {
+                const string specifiedPoolId = "testpoolid";
+                _commandLine.PoolId = specifiedPoolId;
+                var result = NodeEntitlementsBuilder.Build(_commandLine);
+                result.Value.PoolId.Should().Be(specifiedPoolId);
+            }
+        }
+
+        public class JobIdProperty : NodeEntitlementsBuilderTests
+        {
+            [Fact]
+            public void WhenMissing_BuildReturnsNull()
+            {
+                _commandLine.JobId = null;
+                var result = NodeEntitlementsBuilder.Build(_commandLine);
+                result.Value.JobId.Should().BeNull();
+            }
+
+            [Fact]
+            public void WhenSpecified_PropertyHasExpectedValue()
+            {
+                const string specifiedJobId = "testjobid";
+                _commandLine.JobId = specifiedJobId;
+                var result = NodeEntitlementsBuilder.Build(_commandLine);
+                result.Value.JobId.Should().Be(specifiedJobId);
+            }
+        }
+
+        public class TaskIdProperty : NodeEntitlementsBuilderTests
+        {
+            [Fact]
+            public void WhenMissing_BuildReturnsNull()
+            {
+                _commandLine.TaskId = null;
+                var result = NodeEntitlementsBuilder.Build(_commandLine);
+                result.Value.TaskId.Should().BeNull();
+            }
+
+            [Fact]
+            public void WhenSpecified_PropertyHasExpectedValue()
+            {
+                const string specifiedTaskId = "testTaskId";
+                _commandLine.TaskId = specifiedTaskId;
+                var result = NodeEntitlementsBuilder.Build(_commandLine);
+                result.Value.TaskId.Should().Be(specifiedTaskId);
+            }
+        }
     }
 }

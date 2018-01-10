@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Azure.Batch.SoftwareEntitlement.Server.Controllers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -31,7 +32,17 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Server
         {
             services.AddMvc();
             services.TryAddSingleton<IHttpContextAccessor, HttpContextAccessor>();
-            services.TryAddSingleton<EntitlementStore>();
+            services.TryAddSingleton(provider =>
+            {
+                var serverOptions = provider.GetService<SoftwareEntitlementsController.ServerOptions>();
+                return new NodeEntitlementReader(
+                    serverOptions.Audience,
+                    serverOptions.Issuer,
+                    serverOptions.SigningKey,
+                    serverOptions.EncryptionKey);
+            });
+            services.TryAddSingleton<IHostVerifier, StoredEntitlementHostVerifier>();
+            services.TryAddSingleton<EntitlementVerifier>();
         }
 
         [SuppressMessage(

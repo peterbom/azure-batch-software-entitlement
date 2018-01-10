@@ -20,7 +20,7 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
         [Option("not-after", HelpText = "The moment at which the token expires and the application is no longer entitled to execute (format 'yyyy-mm-ddThh:mm'; 24 hour clock; local time; defaults to 7 days).")]
         public string NotAfter { get; set; }
 
-        [Option("address", HelpText = "The externally visible IP addresses of the machine entitled to execute the application(s) (defaults to the addresses of the current machine).")]
+        [Option("address", HelpText = "The externally visible IP addresses of the machine entitled to execute the application(s) (comma separated, defaults to the addresses of the current machine).", Separator = ',')]
         public IList<string> Addresses { get; set; } = new List<string>();
 
         [Option("sign", HelpText = "Certificate thumbprint of the certificate used to sign the token.")]
@@ -40,5 +40,17 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
 
         [Option("maxcores", HelpText = "The maximum number of CPU cores allowed on the machine entitled to execute the application(s) (defaults to the number of logical cores on the current machine).")]
         public int? CpuCoreCount { get; set; }
+
+        [Option("batch-account-id", HelpText = "The id of the batch account under which the application is assumed to be running (optional).")]
+        public string BatchAccountId { get; set; }
+
+        [Option("pool-id", HelpText = "The id of the pool in which the application is assumed to be running (optional).")]
+        public string PoolId { get; set; }
+
+        [Option("job-id", HelpText = "The id of the job in which the application is assumed to be running (optional).")]
+        public string JobId { get; set; }
+
+        [Option("task-id", HelpText = "The id of the task which the application is assumed to be running (optional).")]
+        public string TaskId { get; set; }
     }
 }
