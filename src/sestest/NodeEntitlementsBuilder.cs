@@ -52,156 +52,141 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
         /// of errors.</returns>
         private Errorable<NodeEntitlements> Build()
         {
-            var entitlement = new NodeEntitlements();
-            var errors = new List<string>();
-
-            ConfigureOptional(VirtualMachineId, url => entitlement.WithVirtualMachineId(url));
-            Configure(NotBefore, notBefore => entitlement.FromInstant(notBefore));
-            Configure(NotAfter, notAfter => entitlement.UntilInstant(notAfter));
-            Configure(Audience, audience => entitlement.WithAudience(audience));
-            Configure(Issuer, issuer => entitlement.WithIssuer(issuer));
-            Configure(CpuCoreCount, coreCount => entitlement.WithCpuCoreCount(coreCount));
-            ConfigureOptional(BatchAccountId, batchAccountId => entitlement.WithBatchAccountId(batchAccountId));
-            ConfigureOptional(PoolId, poolId => entitlement.WithPoolId(poolId));
-            ConfigureOptional(JobId, jobId => entitlement.WithJobId(jobId));
-            ConfigureOptional(TaskId, taskId => entitlement.WithTaskId(taskId));
-            ConfigureAll(Addresses, address => entitlement.AddIpAddress(address));
-            ConfigureAll(Applications, app => entitlement.AddApplication(app));
-
-            if (errors.Any())
-            {
-                return Errorable.Failure<NodeEntitlements>(errors);
-            }
-
-            return Errorable.Success(entitlement);
-
-            // <param name="readConfiguration">function to read the configuration value.</param>
-            // <param name="applyConfiguration">function to modify our configuration with the value read.</param>
-            void Configure<V>(Func<Errorable<V>> readConfiguration, Func<V, NodeEntitlements> applyConfiguration)
-            {
-                readConfiguration().Match(
-                    whenSuccessful: value => entitlement = applyConfiguration(value),
-                    whenFailure: e => errors.AddRange(e));
-            }
-
-            // <param name="readConfiguration">function to read the configuration value.</param>
-            // <param name="applyConfiguration">function to modify our configuration with the value read.</param>
-            void ConfigureOptional<V>(Func<Errorable<V>> readConfiguration, Func<V, NodeEntitlements> applyConfiguration)
-                where V : class
-            {
-                readConfiguration().Match(
-                    whenSuccessful: value =>
-                    {
-                        if (value != null)
-                        {
-                            entitlement = applyConfiguration(value);
-                        }
-                    },
-                    whenFailure: e => errors.AddRange(e));
-            }
-
-            // <param name="readConfiguration">function to read the configuration value.</param>
-            // <param name="applyConfiguration">function to modify our configuration with the value read.</param>
-            void ConfigureAll<V>(
-                Func<IEnumerable<Errorable<V>>> readConfiguration,
-                Func<V, NodeEntitlements> applyConfiguration)
-            {
-                foreach (var configuration in readConfiguration())
-                {
-                    configuration.Match(
-                        whenSuccessful: value => entitlement = applyConfiguration(value),
-                        whenFailure: e => errors.AddRange(e));
-                }
-            }
+            return MultiErrorableBuilder.Start(new NodeEntitlements())
+                .Apply(SetVirtualMachineId)
+                .Apply(SetNotBefore)
+                .Apply(SetNotAfter)
+                .Apply(SetAudience)
+                .Apply(SetIssuer)
+                .Apply(SetCpuCoreCount)
+                .Apply(SetBatchAccountId)
+                .Apply(SetPoolId)
+                .Apply(SetJobId)
+                .Apply(SetTaskId)
+                .Apply(SetAddresses)
+                .Apply(SetApplications)
+                .AsErrorable();
         }
 
-        private Errorable<string> VirtualMachineId()
+        private Errorable<NodeEntitlements> SetVirtualMachineId(NodeEntitlements entitlement)
         {
             if (string.IsNullOrEmpty(_commandLine.VirtualMachineId))
             {
                 // If user doesn't specify a virtual machine identifier, we default to null (not empty string)
-                return Errorable.Success<string>(null);
+                return Errorable.Success(entitlement);
             }
 
-            return Errorable.Success(_commandLine.VirtualMachineId);
+            return Errorable.Success(entitlement.WithVirtualMachineId(_commandLine.VirtualMachineId));
         }
 
-        private Errorable<DateTimeOffset> NotBefore()
+        private Errorable<NodeEntitlements> SetNotBefore(NodeEntitlements entitlement)
         {
             if (string.IsNullOrEmpty(_commandLine.NotBefore))
             {
                 // If the user does not specify a start instant for the token, we default to 'now'
-                return Errorable.Success(_now);
+                return Errorable.Success(entitlement.FromInstant(_now));
             }
 
-            return _timestampParser.TryParse(_commandLine.NotBefore, "NotBefore");
+            return _timestampParser.TryParse(_commandLine.NotBefore, "NotBefore")
+                .Then(notBefore => Errorable.Success(entitlement.FromInstant(notBefore)));
         }
 
-        private Errorable<DateTimeOffset> NotAfter()
+        private Errorable<NodeEntitlements> SetNotAfter(NodeEntitlements entitlement)
         {
             if (string.IsNullOrEmpty(_commandLine.NotAfter))
             {
                 // If the user does not specify an expiry for the token, we default to 7days from 'now'
-                return Errorable.Success(_now + TimeSpan.FromDays(7));
+                return Errorable.Success(entitlement.UntilInstant(_now + TimeSpan.FromDays(7)));
             }
 
-            return _timestampParser.TryParse(_commandLine.NotAfter, "NotAfter");
+            return _timestampParser.TryParse(_commandLine.NotAfter, "NotAfter")
+                .Then(notAfter => Errorable.Success(entitlement.UntilInstant(notAfter)));
         }
 
-        private Errorable<string> Audience()
+        private Errorable<NodeEntitlements> SetAudience(NodeEntitlements entitlement)
         {
-            if (string.IsNullOrEmpty(_commandLine.Audience))
-            {
-                // if the user does not specify an audience, we use a default value to "self-sign"
-                return Errorable.Success(Claims.DefaultAudience);
-            }
+            // if the user does not specify an audience, we use a default value to "self-sign"
+            var audience = string.IsNullOrEmpty(_commandLine.Audience)
+                ? Claims.DefaultAudience
+                : _commandLine.Audience;
 
-            return Errorable.Success(_commandLine.Audience);
+            return Errorable.Success(entitlement.WithAudience(audience));
         }
 
-        private Errorable<string> Issuer()
+        private Errorable<NodeEntitlements> SetIssuer(NodeEntitlements entitlement)
         {
-            if (string.IsNullOrEmpty(_commandLine.Issuer))
-            {
-                // if the user does not specify an issuer, we use a default value to "self-sign"
-                return Errorable.Success(Claims.DefaultIssuer);
-            }
+            // if the user does not specify an issuer, we use a default value to "self-sign"
+            var issuer = string.IsNullOrEmpty(_commandLine.Issuer)
+                ? Claims.DefaultIssuer
+                : _commandLine.Issuer;
 
-            return Errorable.Success(_commandLine.Issuer);
+            return Errorable.Success(entitlement.WithIssuer(issuer));
         }
 
-        private Errorable<int> CpuCoreCount()
+        private Errorable<NodeEntitlements> SetCpuCoreCount(NodeEntitlements entitlement)
         {
             // if the user does not specify a cpu core count, we default to the number of logical cores on the current machine
-            return Errorable.Success(_commandLine.CpuCoreCount ?? Environment.ProcessorCount);
+            var cpuCoreCount = _commandLine.CpuCoreCount ?? Environment.ProcessorCount;
+            return Errorable.Success(entitlement.WithCpuCoreCount(cpuCoreCount));
         }
 
-        private Errorable<string> BatchAccountId() => Errorable.Success(_commandLine.BatchAccountId);
-
-        private Errorable<string> PoolId() => Errorable.Success(_commandLine.PoolId);
-
-        private Errorable<string> JobId() => Errorable.Success(_commandLine.JobId);
-
-        private Errorable<string> TaskId() => Errorable.Success(_commandLine.TaskId);
-
-        private IEnumerable<Errorable<IPAddress>> Addresses()
+        private Errorable<NodeEntitlements> SetBatchAccountId(NodeEntitlements entitlement)
         {
-            var result = new List<Errorable<IPAddress>>();
-            if (_commandLine.Addresses != null)
+            if (_commandLine.BatchAccountId == null)
             {
-                foreach (var address in _commandLine.Addresses)
-                {
-                    result.Add(TryParseIPAddress(address));
-                }
+                return Errorable.Success(entitlement);
             }
 
-            if (!result.Any())
-            {
-                result.AddRange(ListMachineIpAddresses());
-            }
-
-            return result;
+            return Errorable.Success(entitlement.WithBatchAccountId(_commandLine.BatchAccountId));
         }
+
+        private Errorable<NodeEntitlements> SetPoolId(NodeEntitlements entitlement)
+        {
+            if (_commandLine.PoolId == null)
+            {
+                return Errorable.Success(entitlement);
+            }
+
+            return Errorable.Success(entitlement.WithPoolId(_commandLine.PoolId));
+        }
+
+        private Errorable<NodeEntitlements> SetJobId(NodeEntitlements entitlement)
+        {
+            if (_commandLine.JobId == null)
+            {
+                return Errorable.Success(entitlement);
+            }
+
+            return Errorable.Success(entitlement.WithJobId(_commandLine.JobId));
+        }
+
+        private Errorable<NodeEntitlements> SetTaskId(NodeEntitlements entitlement)
+        {
+            if (_commandLine.TaskId == null)
+            {
+                return Errorable.Success(entitlement);
+            }
+
+            return Errorable.Success(entitlement.WithTaskId(_commandLine.TaskId));
+        }
+
+        private Errorable<NodeEntitlements> SetAddresses(NodeEntitlements entitlement)
+        {
+            var result = MultiErrorableBuilder.Start(entitlement);
+
+            var addressResults = _commandLine.Addresses?.Count > 0
+                ? _commandLine.Addresses.Select(TryParseIPAddress)
+                : ListMachineIpAddresses();
+
+            foreach (var addressResult in addressResults)
+            {
+                result = result.Apply(
+                    e => addressResult.Then(addr => Errorable.Success(e.AddIpAddress(addr))));
+            }
+
+            return result.AsErrorable();
+        }
+
 
         private static IEnumerable<Errorable<IPAddress>> ListMachineIpAddresses()
         {
@@ -235,19 +220,55 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
             return Errorable.Failure<IPAddress>($"IP address '{address}' is not in an expected format (IPv4 and IPv6 supported).");
         }
 
-        private IEnumerable<Errorable<string>> Applications()
+        private Errorable<NodeEntitlements> SetApplications(NodeEntitlements entitlement)
         {
-            var apps = _commandLine.ApplicationIds.ToList();
-            if (_commandLine.ApplicationIds == null || !_commandLine.ApplicationIds.Any())
+            var apps = _commandLine.ApplicationIds?.ToList();
+            if (apps == null || apps.Count == 0)
             {
-                yield return Errorable.Failure<string>("No applications specified.");
-                yield break;
+                return Errorable.Failure<NodeEntitlements>("No applications specified.");
             }
 
             foreach (var app in apps)
             {
-                yield return Errorable.Success(app.Trim());
+                entitlement = entitlement.AddApplication(app);
             }
+
+            return Errorable.Success(entitlement);
         }
+    }
+
+    public static class MultiErrorableBuilder
+    {
+        public static MultiErrorableBuilder<T> Start<T>(T value)
+        {
+            return MultiErrorableBuilder<T>.Start(value);
+        }
+    }
+
+    public class MultiErrorableBuilder<T>
+    {
+        public T Value { get; }
+
+        public IEnumerable<string> Errors { get; }
+
+        private MultiErrorableBuilder(T value, IEnumerable<string> errors)
+        {
+            Value = value;
+            Errors = errors;
+        }
+
+        public static MultiErrorableBuilder<T> Start(T value)
+        {
+            return new MultiErrorableBuilder<T>(value, new List<string>());
+        }
+
+        public MultiErrorableBuilder<T> Apply(
+            Func<T, Errorable<T>> transformation) => transformation(Value).Match(
+                whenSuccessful: value => new MultiErrorableBuilder<T>(value, Errors),
+                whenFailure: errors => new MultiErrorableBuilder<T>(Value, Errors.Concat(errors)));
+
+        public Errorable<T> AsErrorable() => Errors.Any()
+            ? Errorable.Failure<T>(Errors)
+            : Errorable.Success(Value);
     }
 }
