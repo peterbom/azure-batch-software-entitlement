@@ -15,13 +15,11 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Server.Controllers
         private readonly ServerOptions _serverOptions;
 
         // A reference to our logger
-
         private readonly ILogger _logger;
         private readonly IApplicationLifetime _lifetime;
-        private readonly EntitlementStore _entitlementStore;
 
-        // Verifier used to check tokens
-        private readonly TokenVerifier _verifier;
+        // Verifier used to check entitlement
+        private readonly EntitlementVerifier _verifier;
 
         private const string ApiVersion201705 =  "2017-05-01.5.0";
         private const string ApiVersion201709 =  "2017-09-01.6.0";
@@ -32,16 +30,18 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Server.Controllers
         /// <param name="serverOptions">Options to use when handling requests.</param>
         /// <param name="logger">Reference to our logger for diagnostics.</param>
         /// <param name="lifetime">Lifetime instance to allow us to automatically shut down if requested.</param>
+        /// <param name="verifier">A component responsible for checking data in the request against the claims
+        /// in the token</param>
         public SoftwareEntitlementsController(
             ServerOptions serverOptions,
             ILogger logger,
             IApplicationLifetime lifetime,
-            EntitlementStore entitlementStore)
+            EntitlementVerifier verifier)
         {
             _serverOptions = serverOptions;
             _logger = logger;
             _lifetime = lifetime;
-            _entitlementStore = entitlementStore;
+            _verifier = verifier;
 
             if (_serverOptions.SigningKey != null)
             {
@@ -56,74 +56,27 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Server.Controllers
                     "Tokens must be encrypted with {Credentials}",
                     _serverOptions.EncryptionKey.KeyId);
             }
-
-            _verifier = new TokenVerifier(_serverOptions.SigningKey, _serverOptions.EncryptionKey);
         }
 
         [HttpPost]
         [Produces("application/json")]
         public IActionResult RequestEntitlement(
-            [FromBody] SoftwareEntitlementRequest entitlementRequest,
+            [FromBody] SoftwareEntitlementRequestBody entitlementRequestBody,
             [FromQuery(Name = "api-version")] string apiVersion)
         {
             try
             {
-                if (!IsValidApiVersion(apiVersion))
+                var (request, token, requestError) = TryExtractParameters(apiVersion, entitlementRequestBody);
+                if (requestError != null)
                 {
-                    return CreateInvalidApiVersionError(entitlementRequest, apiVersion);
+                    return CreateBadRequestResponse(requestError);
                 }
 
-                _logger.LogInformation(
-                    "Selected api-version is {ApiVersion}",
-                    apiVersion);
-
-                if (entitlementRequest == null)
-                {
-                    return CreateMissingRequestError();
-                }
-
-                _logger.LogInformation(
-                    "Requesting entitlement for {Application}",
-                    entitlementRequest.ApplicationId);
-                _logger.LogDebug("Request token: {Token}", entitlementRequest.Token);
-
-                var remoteAddress = HttpContext.Connection.RemoteIpAddress;
-                _logger.LogDebug("Remote Address: {Address}", remoteAddress);
-
-                if (entitlementRequest.HostId == null && ApiRequiresHostId(apiVersion))
-                {
-                    return CreateMissingHostIdError();
-                }
-
-                if (!entitlementRequest.Cores.HasValue && ApiRequiresCpuCoreCount(apiVersion))
-                {
-                    return CreateMissingCpuCoreCountError();
-                }
-
-                Errorable<NodeEntitlements> verificationResult = _verifier.Verify(
-                    entitlementRequest.Token,
-                    _serverOptions.Audience,
-                    _serverOptions.Issuer,
-                    entitlementRequest.ApplicationId,
-                    remoteAddress,
-                    entitlementRequest.Cores);
-
-                // Check the host ID from the request against the entitlement ID we've just
-                // extracted from the token.
-                verificationResult = verificationResult.Then(entitlement =>
-                {
-                    var allowed =
-                        !ApiRequiresHostId(apiVersion) ||
-                        _entitlementStore.StoreAndCheck(entitlement.Identifier, entitlementRequest.HostId);
-
-                    return allowed
-                        ? Errorable.Success(entitlement)
-                        : Errorable.Failure<NodeEntitlements>($"Host {entitlementRequest.HostId} is not allowed for entitlement {entitlement.Identifier}");
-                });
+                var verificationResult = _verifier.Verify(request, entitlementRequestBody.Token);
 
                 return verificationResult.Match(
                     whenSuccessful: entitlement => CreateEntitlementApprovedResponse(apiVersion, entitlement),
-                    whenFailure: errors => CreateEntitlementDeniedError(entitlementRequest, errors));
+                    whenFailure: errors => CreateEntitlementDeniedResponse(entitlementRequestBody, errors));
             }
             finally
             {
@@ -132,6 +85,81 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Server.Controllers
                     _lifetime.StopApplication();
                 }
             }
+        }
+
+        /// <summary>
+        /// Attempts to extracts all the parameters required for validating an entitlement request.
+        /// Any error here reflect a badly formed request.
+        /// </summary>
+        /// <param name="apiVersion">The API version from the query string</param>
+        /// <param name="requestBody">The information in the request body</param>
+        /// <returns>
+        /// A tuple in which either the <see cref="EntitlementVerificationRequest"/> and token values
+        /// are present if the request was well formed, or an informative error otherwise.
+        /// </returns>
+        private (EntitlementVerificationRequest Request, string Token, string Error) TryExtractParameters(
+            string apiVersion,
+            SoftwareEntitlementRequestBody requestBody)
+        {
+            if (!IsValidApiVersion(apiVersion))
+            {
+                _logger.LogDebug(
+                    "Selected api-version of {ApiVersion} is not supported; denying entitlement request.",
+                    apiVersion);
+
+                return (Request: null, Token: null, Error: $"Selected api-version of {apiVersion} is not supported; denying entitlement request.");
+            }
+
+            _logger.LogInformation(
+                "Selected api-version is {ApiVersion}",
+                apiVersion);
+
+            if (requestBody == null)
+            {
+                _logger.LogDebug("No software entitlement request body");
+                return (Request: null, Token: null, Error: "Missing request body from software entitlement request.");
+            }
+
+            if (string.IsNullOrEmpty(requestBody.Token))
+            {
+                _logger.LogDebug("token not specified in request body");
+                return (Request: null, Token: null, Error: "Missing token from software entitlement request.");
+            }
+
+            if (string.IsNullOrEmpty(requestBody.ApplicationId))
+            {
+                _logger.LogDebug("applicationId not specified in request body");
+                return (Request: null, Token: null, Error: "Missing applicationId value from software entitlement request.");
+            }
+
+            var remoteAddress = HttpContext.Connection.RemoteIpAddress;
+            _logger.LogDebug("Remote Address: {Address}", remoteAddress);
+
+            var request = new EntitlementVerificationRequest(requestBody.ApplicationId, remoteAddress);
+
+            if (ApiRequiresHostId(apiVersion))
+            {
+                if (requestBody.HostId == null)
+                {
+                    _logger.LogDebug("hostId not specified in request body");
+                    return (Request: null, Token: null, Error: "Missing hostId value from software entitlement request.");
+                }
+
+                request.HostId = requestBody.HostId;
+            }
+
+            if (ApiRequiresCpuCoreCount(apiVersion))
+            {
+                if (!requestBody.Cores.HasValue)
+                {
+                    _logger.LogDebug("cores not specified in request body");
+                    return (Request: null, Token: null, Error: "Missing cores value from software entitlement request.");
+                }
+
+                request.CpuCoreCount = requestBody.Cores;
+            }
+
+            return (Request: request, requestBody.Token, Error: null);
         }
 
         private ObjectResult CreateEntitlementApprovedResponse(string apiVersion, NodeEntitlements entitlement)
@@ -154,7 +182,7 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Server.Controllers
             return Ok(response);
         }
 
-        private ObjectResult CreateEntitlementDeniedError(SoftwareEntitlementRequest entitlementRequest,
+        private ObjectResult CreateEntitlementDeniedResponse(SoftwareEntitlementRequestBody entitlementRequest,
             IEnumerable<string> errors)
         {
             foreach (var e in errors)
@@ -171,55 +199,12 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Server.Controllers
             return StatusCode(403, error);
         }
 
-        private ObjectResult CreateMissingRequestError()
+        private ObjectResult CreateBadRequestResponse(string errorMessage)
         {
-            _logger.LogError("No software entitlement request made");
-
             var error = new SoftwareEntitlementFailureResponse
             {
                 Code = "EntitlementDenied",
-                Message = new ErrorMessage("No software entitlement request made.")
-            };
-
-            return StatusCode(400, error);
-        }
-
-        private ObjectResult CreateMissingHostIdError()
-        {
-            _logger.LogError("No hostId specified");
-
-            var error = new SoftwareEntitlementFailureResponse
-            {
-                Code = "EntitlementDenied",
-                Message = new ErrorMessage("Missing hostId value from software entitlement request.")
-            };
-
-            return StatusCode(400, error);
-        }
-
-        private ObjectResult CreateMissingCpuCoreCountError()
-        {
-            _logger.LogError("No cores specified");
-
-            var error = new SoftwareEntitlementFailureResponse
-            {
-                Code = "EntitlementDenied",
-                Message = new ErrorMessage("Missing cores value from software entitlement request.")
-            };
-
-            return StatusCode(400, error);
-        }
-
-        private ObjectResult CreateInvalidApiVersionError(SoftwareEntitlementRequest entitlementRequest, string apiVersion)
-        {
-            _logger.LogError(
-                "Selected api-version of {ApiVersion} is not supported; denying entitlement request.",
-                apiVersion);
-
-            var error = new SoftwareEntitlementFailureResponse
-            {
-                Code = "EntitlementDenied",
-                Message = new ErrorMessage($"Entitlement for {entitlementRequest.ApplicationId} was denied.")
+                Message = new ErrorMessage(errorMessage)
             };
 
             return StatusCode(400, error);

@@ -59,6 +59,10 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
                 .Configure(Audience(), (e, audience) => e.WithAudience(audience))
                 .Configure(Issuer(), (e, issuer) => e.WithIssuer(issuer))
 				.Configure(CpuCoreCount(), (e, coreCount) => e.WithCpuCoreCount(coreCount))
+                .ConfigureOptional(BatchAccountId(), (e, batchAccountId) => e.WithBatchAccountId(batchAccountId))
+                .ConfigureOptional(PoolId(), (e, poolId) => e.WithPoolId(poolId))
+                .ConfigureOptional(JobId(), (e, jobId) => e.WithJobId(jobId))
+                .ConfigureOptional(TaskId(), (e, taskId) => e.WithTaskId(taskId))
                 .ConfigureAll(Addresses(), (e, address) => e.AddIpAddress(address))
                 .ConfigureAll(Applications(), (e, app) => e.AddApplication(app));
 
@@ -125,6 +129,14 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
             // if the user does not specify a cpu core count, we default to the number of logical cores on the current machine
             return Errorable.Success(_commandLine.CpuCoreCount ?? Environment.ProcessorCount);
         }
+
+        private Errorable<string> BatchAccountId() => Errorable.Success(_commandLine.BatchAccountId);
+
+        private Errorable<string> PoolId() => Errorable.Success(_commandLine.PoolId);
+
+        private Errorable<string> JobId() => Errorable.Success(_commandLine.JobId);
+
+        private Errorable<string> TaskId() => Errorable.Success(_commandLine.TaskId);
 
         private IEnumerable<Errorable<IPAddress>> Addresses()
         {

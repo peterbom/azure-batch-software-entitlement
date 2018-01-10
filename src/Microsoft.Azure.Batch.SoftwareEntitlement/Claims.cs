@@ -43,8 +43,6 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
         /// </summary>
         public const string CpuCoreCount = "maxcores";
 
-        // TODO: Are these needed here?
-        /*
         /// <summary>
         /// The unique identifier of the batch account that owns the pool
         /// </summary>
@@ -64,6 +62,5 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
         /// A unique identifier for the task itself
         /// </summary>
         public const string TaskId = "taskid";
-        */
     }
 }

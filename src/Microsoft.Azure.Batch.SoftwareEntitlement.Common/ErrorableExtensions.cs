@@ -153,6 +153,15 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Common
                     whenFailure: errors => Errorable.Failure<(A, B, C, D)>(leftErrors).AddErrors(errors)));
         }
 
+        /// <summary>
+        /// Performs an action on the combined results of two <see cref="Errorable{T}"/> objects, if and
+        /// only if both inputs were successful.
+        /// </summary>
+        /// <typeparam name="A">Type of the first value held by <paramref name="errorable"/>.</typeparam>
+        /// <typeparam name="B">Type of the second value held by <paramref name="errorable"/>.</typeparam>
+        /// <param name="errorable">The combination of two <see cref="Errorable{T}"/> objects.</param>
+        /// <param name="whenSuccessful">Action to execute if both inputs were successful.</param>
+        /// <param name="whenFailure">Action to execute if either input produced an error.</param>
         public static void Do<A, B>(
             this Errorable<(A, B)> errorable,
             Action<A, B> whenSuccessful,
@@ -176,6 +185,16 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Common
             errorable.Match(t => whenSuccessful(t.Item1, t.Item2), whenFailure);
         }
 
+        /// <summary>
+        /// Performs an action on the combined results of three <see cref="Errorable{T}"/> objects, if and
+        /// only if all inputs were successful.
+        /// </summary>
+        /// <typeparam name="A">Type of the first value held by <paramref name="errorable"/>.</typeparam>
+        /// <typeparam name="B">Type of the second value held by <paramref name="errorable"/>.</typeparam>
+        /// <typeparam name="C">Type of the third value held by <paramref name="errorable"/>.</typeparam>
+        /// <param name="errorable">The combination of three <see cref="Errorable{T}"/> objects.</param>
+        /// <param name="whenSuccessful">Action to execute if all inputs were successful.</param>
+        /// <param name="whenFailure">Action to execute if any input produced an error.</param>
         public static void Do<A, B, C>(
             this Errorable<(A, B, C)> errorable,
             Action<A, B, C> whenSuccessful,
@@ -199,6 +218,17 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Common
             errorable.Match(t => whenSuccessful(t.Item1, t.Item2, t.Item3), whenFailure);
         }
 
+        /// <summary>
+        /// Performs an action on the combined results of four <see cref="Errorable{T}"/> objects, if and
+        /// only if all inputs were successful.
+        /// </summary>
+        /// <typeparam name="A">Type of the first value held by <paramref name="errorable"/>.</typeparam>
+        /// <typeparam name="B">Type of the second value held by <paramref name="errorable"/>.</typeparam>
+        /// <typeparam name="C">Type of the third value held by <paramref name="errorable"/>.</typeparam>
+        /// <typeparam name="D">Type of the fourth value held by <paramref name="errorable"/>.</typeparam>
+        /// <param name="errorable">The combination of four <see cref="Errorable{T}"/> objects.</param>
+        /// <param name="whenSuccessful">Action to execute if all inputs were successful.</param>
+        /// <param name="whenFailure">Action to execute if any input produced an error.</param>
         public static void Do<A, B, C, D>(
             this Errorable<(A, B, C, D)> errorable,
             Action<A, B, C, D> whenSuccessful,
@@ -222,6 +252,19 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Common
             errorable.Match(t => whenSuccessful(t.Item1, t.Item2, t.Item3, t.Item4), whenFailure);
         }
 
+        /// <summary>
+        /// Transforms the combined results of two <see cref="Errorable{T}"/> objects into a single
+        /// <see cref="Errorable{T}"/> type.
+        /// </summary>
+        /// <typeparam name="A">Type of the first value held by <paramref name="errorable"/>.</typeparam>
+        /// <typeparam name="B">Type of the second value held by <paramref name="errorable"/>.</typeparam>
+        /// <typeparam name="R">Type of the result of the transformation.</typeparam>
+        /// <param name="errorable">The combination of two <see cref="Errorable{T}"/> objects.</param>
+        /// <param name="transform">Transformation to apply if both inputs were successful.</param>
+        /// <returns>
+        /// The result of applying the transformation to the inputs, if both inputs were successful,
+        /// or the combination of errors from the inputs otherwise.
+        /// </returns>
         public static Errorable<R> Map<A, B, R>(
             this Errorable<(A, B)> errorable,
             Func<A, B, R> transform)
@@ -241,6 +284,20 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Common
                 e => Errorable.Failure<R>(e));
         }
 
+        /// <summary>
+        /// Transforms the combined results of three <see cref="Errorable{T}"/> objects into a single
+        /// <see cref="Errorable{T}"/> type.
+        /// </summary>
+        /// <typeparam name="A">Type of the first value held by <paramref name="errorable"/>.</typeparam>
+        /// <typeparam name="B">Type of the second value held by <paramref name="errorable"/>.</typeparam>
+        /// <typeparam name="C">Type of the third value held by <paramref name="errorable"/>.</typeparam>
+        /// <typeparam name="R">Type of the result of the transformation.</typeparam>
+        /// <param name="errorable">The combination of three <see cref="Errorable{T}"/> objects.</param>
+        /// <param name="transform">Transformation to apply if all inputs were successful.</param>
+        /// <returns>
+        /// The result of applying the transformation to the inputs, if all inputs were successful,
+        /// or the combination of errors from the inputs otherwise.
+        /// </returns>
         public static Errorable<R> Map<A, B, C, R>(
             this Errorable<(A, B, C)> errorable,
             Func<A, B, C, R> transform)
@@ -260,6 +317,21 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Common
                 e => Errorable.Failure<R>(e));
         }
 
+        /// <summary>
+        /// Transforms the combined results of four <see cref="Errorable{T}"/> objects into a single
+        /// <see cref="Errorable{T}"/> type.
+        /// </summary>
+        /// <typeparam name="A">Type of the first value held by <paramref name="errorable"/>.</typeparam>
+        /// <typeparam name="B">Type of the second value held by <paramref name="errorable"/>.</typeparam>
+        /// <typeparam name="C">Type of the third value held by <paramref name="errorable"/>.</typeparam>
+        /// <typeparam name="D">Type of the fourth value held by <paramref name="errorable"/>.</typeparam>
+        /// <typeparam name="R">Type of the result of the transformation.</typeparam>
+        /// <param name="errorable">The combination of four <see cref="Errorable{T}"/> objects.</param>
+        /// <param name="transform">Transformation to apply if all inputs were successful.</param>
+        /// <returns>
+        /// The result of applying the transformation to the inputs, if all inputs were successful,
+        /// or the combination of errors from the inputs otherwise.
+        /// </returns>
         public static Errorable<R> Map<A, B, C, D, R>(
             this Errorable<(A, B, C, D)> errorable,
             Func<A, B, C, D, R> transform)
@@ -279,6 +351,21 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Common
                 e => Errorable.Failure<R>(e));
         }
 
+        /// <summary>
+        /// Asynchronously transforms the combined results of four <see cref="Errorable{T}"/> objects into a single
+        /// <see cref="Errorable{T}"/> type.
+        /// </summary>
+        /// <typeparam name="A">Type of the first value held by <paramref name="errorable"/>.</typeparam>
+        /// <typeparam name="B">Type of the second value held by <paramref name="errorable"/>.</typeparam>
+        /// <typeparam name="C">Type of the third value held by <paramref name="errorable"/>.</typeparam>
+        /// <typeparam name="D">Type of the fourth value held by <paramref name="errorable"/>.</typeparam>
+        /// <typeparam name="R">Type of the result of the transformation.</typeparam>
+        /// <param name="errorable">The combination of four <see cref="Errorable{T}"/> objects.</param>
+        /// <param name="transform">Asynchronous transformation to apply if all inputs were successful.</param>
+        /// <returns>
+        /// The result of applying the transformation to the inputs, if all inputs were successful,
+        /// or the combination of errors from the inputs otherwise.
+        /// </returns>
         public static Task<Errorable<R>> MapAsync<A, B, C, D, R>(
             this Errorable<(A, B, C, D)> errorable,
             Func<A, B, C, D, Task<R>> transform)
@@ -400,6 +487,20 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Common
             return subject.With(value).Map((s, v) => v ? applyConfiguration(s) : s);
         }
 
+        /// <summary>
+        /// Executes a function returning an <see cref="Errorable{T}"/> conditionally, depending
+        /// on the result or a previous <see cref="Errorable{T}"/>.
+        /// </summary>
+        /// <typeparam name="TOld">The type of <paramref name="errorable"/> and the input to
+        /// <paramref name="whenSuccessful"/>.</typeparam>
+        /// <typeparam name="TNew">The return type of <paramref name="whenSuccessful"/></typeparam>
+        /// <param name="errorable">An existing <see cref="Errorable{T}"/> object.</param>
+        /// <param name="whenSuccessful">A function to execute on <paramref name="errorable"/> if it
+        /// was successful</param>
+        /// <returns>
+        /// An <see cref="Errorable{T}"/> containing the result of executing <paramref name="whenSuccessful"/>
+        /// if the input was sucessful, or the errors from <paramref name="errorable"/> otherwise.
+        /// </returns>
         public static Errorable<TNew> Then<TOld, TNew>(
             this Errorable<TOld> errorable,
             Func<TOld, Errorable<TNew>> whenSuccessful)
