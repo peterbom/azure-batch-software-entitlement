@@ -6,10 +6,17 @@ using Microsoft.Extensions.Logging;
 
 namespace Microsoft.Azure.Batch.SoftwareEntitlement.Common
 {
+    public interface ICertificateStore
+    {
+        IEnumerable<X509Certificate2> FindAll();
+
+        Errorable<X509Certificate2> FindByThumbprint(string purpose, CertificateThumbprint thumbprint);
+    }
+
     /// <summary>
     /// A simple abstraction over the framework supplied store classes
     /// </summary>
-    public sealed class CertificateStore
+    public sealed class CertificateStore : ICertificateStore
     {
         // A list of StoreNames where we should look when finding certificates
         private readonly List<StoreName> _storeNames;
