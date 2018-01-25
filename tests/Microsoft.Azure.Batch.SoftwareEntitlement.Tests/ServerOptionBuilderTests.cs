@@ -15,26 +15,27 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
         // Server options for testing
         private readonly ServerCommandLine _commandLine = new ServerCommandLine();
 
-        // Permissive options to bypass mandatory errors when testing other properties
+        // Building a ServerOptions object consists of two actions for each property:
+        // 1. Validating/parsing/defaulting the user input; and
+        // 2. Initializing a copy of the ServerOptions object with the appropriate
+        //    property value set.
+        // To ensure the second part is not missed, we're unit testing both of these
+        // actions together. We want to test each property individually, but some
+        // properties are intended to be mandatory, and their absence will cause
+        // errors unrelated to the property being tested. To work around this we use
+        // a "permissive" option which changes the behaviour of the builder such that
+        // the enforcement of mandatory properties is bypassed.
         private readonly ServerOptionBuilderOptions _permissiveOptions =
-            ServerOptionBuilderOptions.ServerUrlOptional
-            | ServerOptionBuilderOptions.ConnectionThumbprintOptional;
+            ServerOptionBuilderOptions.ConnectionThumbprintOptional;
 
         public class ServerUrl : ServerOptionBuilderTests
         {
             [Fact]
-            public void Build_WithEmptyServerUrl_DoesNotReturnValue()
-            {
-                var options = ServerOptionBuilder.Build(_commandLine);
-                options.HasValue.Should().BeFalse();
-            }
-
-            [Fact]
-            public void Build_WithEmptyServerUrl_HasErrorForServerUrl()
+            public void Build_WithEmptyServerUrl_SetsDefaultServerUrl()
             {
                 _commandLine.ServerUrl = string.Empty;
-                var options = ServerOptionBuilder.Build(_commandLine);
-                options.Errors.Should().Contain(e => e.Contains("server endpoint URL"));
+                var options = ServerOptionBuilder.Build(_commandLine, _permissiveOptions);
+                options.Value.ServerUrl.Should().Be(ServerCommandLine.DefaultServerUrl);
             }
 
             [Fact]

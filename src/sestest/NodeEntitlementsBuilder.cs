@@ -53,16 +53,16 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
         private Errorable<NodeEntitlements> Build()
         {
             var result = Errorable.Success(new NodeEntitlements())
-                .ConfigureOptional(VirtualMachineId(), (e, url) => e.WithVirtualMachineId(url))
+                .Configure(VirtualMachineId(), (e, url) => e.WithVirtualMachineId(url))
                 .Configure(NotBefore(), (e, notBefore) => e.FromInstant(notBefore))
                 .Configure(NotAfter(), (e, notAfter) => e.UntilInstant(notAfter))
                 .Configure(Audience(), (e, audience) => e.WithAudience(audience))
                 .Configure(Issuer(), (e, issuer) => e.WithIssuer(issuer))
 				.Configure(CpuCoreCount(), (e, coreCount) => e.WithCpuCoreCount(coreCount))
-                .ConfigureOptional(BatchAccountId(), (e, batchAccountId) => e.WithBatchAccountId(batchAccountId))
-                .ConfigureOptional(PoolId(), (e, poolId) => e.WithPoolId(poolId))
-                .ConfigureOptional(JobId(), (e, jobId) => e.WithJobId(jobId))
-                .ConfigureOptional(TaskId(), (e, taskId) => e.WithTaskId(taskId))
+                .Configure(BatchAccountId(), (e, batchAccountId) => e.WithBatchAccountId(batchAccountId))
+                .Configure(PoolId(), (e, poolId) => e.WithPoolId(poolId))
+                .Configure(JobId(), (e, jobId) => e.WithJobId(jobId))
+                .Configure(TaskId(), (e, taskId) => e.WithTaskId(taskId))
                 .ConfigureAll(Addresses(), (e, address) => e.AddIpAddress(address))
                 .ConfigureAll(Applications(), (e, app) => e.AddApplication(app));
 
@@ -71,13 +71,9 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
 
         private Errorable<string> VirtualMachineId()
         {
-            if (string.IsNullOrEmpty(_commandLine.VirtualMachineId))
-            {
-                // If user doesn't specify a virtual machine identifier, we default to null (not empty string)
-                return Errorable.Success<string>(null);
-            }
-
-            return Errorable.Success(_commandLine.VirtualMachineId);
+            // VirtualMachineId is not allowed to be set to null, but string.Empty is valid
+            // (that's the value if otherwise unspecified).
+            return Errorable.Success(_commandLine.VirtualMachineId ?? string.Empty);
         }
 
         private Errorable<DateTimeOffset> NotBefore()
