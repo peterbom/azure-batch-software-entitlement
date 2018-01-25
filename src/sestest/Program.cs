@@ -17,6 +17,8 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
         // Provider used for ASP.NET logging
         private static ILoggerProvider _provider;
 
+        private static ICertificateStore _certificateStore = new CertificateStore();
+
         public static async Task<int> Main(string[] args)
         {
             var parser = new Parser(ConfigureParser);
@@ -67,7 +69,7 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
         /// <returns>Exit code to return from this process.</returns>
         public static async Task<int> Serve(ServerCommandLine commandLine)
         {
-            var options = ServerOptionBuilder.Build(commandLine);
+            var options = ServerOptionBuilder.Build(commandLine, _certificateStore);
             return await options.Match(
                 RunServer,
                 errors =>
