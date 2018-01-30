@@ -58,6 +58,11 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
                 .Configure(NotAfter(), (e, notAfter) => e.UntilInstant(notAfter))
                 .Configure(Audience(), (e, audience) => e.WithAudience(audience))
                 .Configure(Issuer(), (e, issuer) => e.WithIssuer(issuer))
+                .Configure(CpuCoreCount(), (e, coreCount) => e.WithCpuCoreCount(coreCount))
+                .Configure(BatchAccountId(), (e, batchAccountId) => e.WithBatchAccountId(batchAccountId))
+                .Configure(PoolId(), (e, poolId) => e.WithPoolId(poolId))
+                .Configure(JobId(), (e, jobId) => e.WithJobId(jobId))
+                .Configure(TaskId(), (e, taskId) => e.WithTaskId(taskId))
                 .ConfigureAll(Addresses(), (e, address) => e.AddIpAddress(address))
                 .ConfigureAll(Applications(), (e, app) => e.AddApplication(app));
 
@@ -97,7 +102,7 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
         {
             if (string.IsNullOrEmpty(_commandLine.Audience))
             {
-                // if the audience does not specify an audience, we use a default value to "self-sign"
+                // if the user does not specify an audience, we use a default value to "self-sign"
                 return Errorable.Success(Claims.DefaultAudience);
             }
 
@@ -108,12 +113,26 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
         {
             if (string.IsNullOrEmpty(_commandLine.Issuer))
             {
-                // if the audience does not specify an issuer, we use a default value to "self-sign"
+                // if the user does not specify an issuer, we use a default value to "self-sign"
                 return Errorable.Success(Claims.DefaultIssuer);
             }
 
             return Errorable.Success(_commandLine.Issuer);
         }
+
+        private Errorable<int> CpuCoreCount()
+        {
+            // if the user does not specify a cpu core count, we default to the number of logical cores on the current machine
+            return Errorable.Success(_commandLine.CpuCoreCount ?? Environment.ProcessorCount);
+        }
+
+        private Errorable<string> BatchAccountId() => Errorable.Success(_commandLine.BatchAccountId);
+
+        private Errorable<string> PoolId() => Errorable.Success(_commandLine.PoolId);
+
+        private Errorable<string> JobId() => Errorable.Success(_commandLine.JobId);
+
+        private Errorable<string> TaskId() => Errorable.Success(_commandLine.TaskId);
 
         private IEnumerable<Errorable<IPAddress>> Addresses()
         {

@@ -45,6 +45,8 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
 
         public class VirtualMachineIdProperty : NodeEntitlementsBuilderTests
         {
+            private const string VirtualMachineId = "virtualMachine";
+
             [Fact]
             public void WhenMissing_BuildReturnsValue()
             {
@@ -64,7 +66,7 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
             [Fact]
             public void WithId_BuildReturnsNoErrorForVirtualMachineId()
             {
-                _commandLine.VirtualMachineId = "virtualMachine";
+                _commandLine.VirtualMachineId = VirtualMachineId;
                 var entitlement = NodeEntitlementsBuilder.Build(_commandLine);
                 entitlement.Errors.Should().NotContain(e => e.Contains("virtual machine identifier"));
             }
@@ -72,10 +74,9 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
             [Fact]
             public void WithId_PropertyHasExpectedValue()
             {
-                const string virtualMachineId = "virtualMachine";
-                _commandLine.VirtualMachineId = virtualMachineId;
+                _commandLine.VirtualMachineId = VirtualMachineId;
                 var entitlement = NodeEntitlementsBuilder.Build(_commandLine);
-                entitlement.Value.VirtualMachineId.Should().Be(virtualMachineId);
+                entitlement.Value.VirtualMachineId.Should().Be(VirtualMachineId);
             }
         }
 
@@ -271,6 +272,39 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
                 entitlement.HasValue.Should().BeFalse();
                 entitlement.Errors.Should().Contain(e => e.Contains("address"));
             }
+
+            [Fact]
+            public void WhenMultipleInvalidAddresses_ReturnsErrorForEach()
+            {
+                _commandLine.Addresses.Add("Not.An.IP.Address");
+                _commandLine.Addresses.Add("NotOneEither");
+                var entitlement = NodeEntitlementsBuilder.Build(_commandLine);
+                entitlement.HasValue.Should().BeFalse();
+                entitlement.Errors.Count.Should().Be(2);
+                entitlement.Errors.Should().Contain(e => e.Contains("Not.An.IP.Address"));
+                entitlement.Errors.Should().Contain(e => e.Contains("NotOneEither"));
+            }
+        }
+
+        public class MaxCoresProperty : NodeEntitlementsBuilderTests
+        {
+            private const int SpecifiedCpuCoreCount = 33;
+
+            [Fact]
+            public void WhenMissing_BuildReturnsLogicalCoreCount()
+            {
+                _commandLine.CpuCoreCount = null;
+                var result = NodeEntitlementsBuilder.Build(_commandLine);
+                result.Value.CpuCoreCount.Should().Be(Environment.ProcessorCount);
+            }
+
+            [Fact]
+            public void WhenValid_PropertyHasExpectedValue()
+            {
+                _commandLine.CpuCoreCount = SpecifiedCpuCoreCount;
+                var result = NodeEntitlementsBuilder.Build(_commandLine);
+                result.Value.CpuCoreCount.Should().Be(SpecifiedCpuCoreCount);
+            }
         }
 
         public class IssuerProperty : NodeEntitlementsBuilderTests
@@ -291,6 +325,90 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
                 _commandLine.Issuer = _issuer;
                 var result = NodeEntitlementsBuilder.Build(_commandLine);
                 result.Value.Issuer.Should().Be(_issuer);
+            }
+        }
+
+        public class BatchAccountIdProperty : NodeEntitlementsBuilderTests
+        {
+            private const string SpecifiedBatchAccountId = "testbatchaccountid";
+
+            [Fact]
+            public void WhenMissing_BuildReturnsNull()
+            {
+                _commandLine.BatchAccountId = null;
+                var result = NodeEntitlementsBuilder.Build(_commandLine);
+                result.Value.BatchAccountId.Should().BeNull();
+            }
+
+            [Fact]
+            public void WhenSpecified_PropertyHasExpectedValue()
+            {
+                _commandLine.BatchAccountId = SpecifiedBatchAccountId;
+                var result = NodeEntitlementsBuilder.Build(_commandLine);
+                result.Value.BatchAccountId.Should().Be(SpecifiedBatchAccountId);
+            }
+        }
+
+        public class PoolIdProperty : NodeEntitlementsBuilderTests
+        {
+            private const string SpecifiedPoolId = "testpoolid";
+
+            [Fact]
+            public void WhenMissing_BuildReturnsNull()
+            {
+                _commandLine.PoolId = null;
+                var result = NodeEntitlementsBuilder.Build(_commandLine);
+                result.Value.PoolId.Should().BeNull();
+            }
+
+            [Fact]
+            public void WhenSpecified_PropertyHasExpectedValue()
+            {
+                _commandLine.PoolId = SpecifiedPoolId;
+                var result = NodeEntitlementsBuilder.Build(_commandLine);
+                result.Value.PoolId.Should().Be(SpecifiedPoolId);
+            }
+        }
+
+        public class JobIdProperty : NodeEntitlementsBuilderTests
+        {
+            private const string SpecifiedJobId = "testjobid";
+
+            [Fact]
+            public void WhenMissing_BuildReturnsNull()
+            {
+                _commandLine.JobId = null;
+                var result = NodeEntitlementsBuilder.Build(_commandLine);
+                result.Value.JobId.Should().BeNull();
+            }
+
+            [Fact]
+            public void WhenSpecified_PropertyHasExpectedValue()
+            {
+                _commandLine.JobId = SpecifiedJobId;
+                var result = NodeEntitlementsBuilder.Build(_commandLine);
+                result.Value.JobId.Should().Be(SpecifiedJobId);
+            }
+        }
+
+        public class TaskIdProperty : NodeEntitlementsBuilderTests
+        {
+            private const string SpecifiedTaskId = "testTaskId";
+
+            [Fact]
+            public void WhenMissing_BuildReturnsNull()
+            {
+                _commandLine.TaskId = null;
+                var result = NodeEntitlementsBuilder.Build(_commandLine);
+                result.Value.TaskId.Should().BeNull();
+            }
+
+            [Fact]
+            public void WhenSpecified_PropertyHasExpectedValue()
+            {
+                _commandLine.TaskId = SpecifiedTaskId;
+                var result = NodeEntitlementsBuilder.Build(_commandLine);
+                result.Value.TaskId.Should().Be(SpecifiedTaskId);
             }
         }
     }

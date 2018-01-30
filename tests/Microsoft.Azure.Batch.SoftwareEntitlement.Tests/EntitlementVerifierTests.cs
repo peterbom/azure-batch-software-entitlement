@@ -37,6 +37,18 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
         // IP addresses to use
         private readonly IPAddress _approvedAddress = IPAddress.Parse("203.0.113.45");
 
+        // CPU core counts
+        private readonly int _cpuCoreCountMax = 2;
+
+        // Claims relating to the Batch context in which the host is expected to be running
+        private readonly string _batchAccountId = "testbatchaccount";
+        private readonly string _poolId = "testpoolid";
+        private readonly string _jobId = "testjobid";
+        private readonly string _taskId = "testtaskid";
+
+        // Host IDs
+        private readonly string _sampleHostId = "should-not-change-for-a-single-entitlement";
+
         // Name for the approved entitlement
         private readonly string _entitlementIdentifer = "mystery-identifier";
 
@@ -80,7 +92,7 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
                 _encryptingKey, "dir", SecurityAlgorithms.Aes256CbcHmacSha512);
 
             _completeEntitlement = CreateEntitlements();
-            _validEntitlementRequest = CreateRequest(_approvedApp, _approvedAddress);
+            _validEntitlementRequest = CreateRequest(_approvedApp, _approvedAddress, _sampleHostId, _cpuCoreCountMax);
 
             _verifier = CreateEntitlementVerifier(_signingKey, _encryptingKey);
             _generator = new TokenGenerator(_nullLogger, _signingCredentials, _encryptingCredentials);
@@ -88,10 +100,12 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
 
         private EntitlementVerifier CreateEntitlementVerifier(
             SecurityKey signingKey,
-            SecurityKey encryptingKey)
+            SecurityKey encryptingKey,
+            IHostVerifier hostVerifier = null)
         {
             var entitlementReader = new NodeEntitlementReader(_audience, _issuer, signingKey, encryptingKey);
-            return new EntitlementVerifier(entitlementReader);
+            hostVerifier = hostVerifier ?? new StoredEntitlementHostVerifier();
+            return new EntitlementVerifier(entitlementReader, hostVerifier);
         }
 
         private NodeEntitlements CreateEntitlements(EntitlementCreationOptions creationOptions = EntitlementCreationOptions.None)
@@ -122,6 +136,20 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
                 result = result.WithVirtualMachineId("virtual-machine-identifier");
             }
 
+            if (!creationOptions.HasFlag(EntitlementCreationOptions.OmitCpuCoreCount))
+            {
+                result = result.WithCpuCoreCount(_cpuCoreCountMax);
+            }
+
+            if (!creationOptions.HasFlag(EntitlementCreationOptions.OmitBatchContext))
+            {
+                result = result
+                    .WithBatchAccountId(_batchAccountId)
+                    .WithPoolId(_poolId)
+                    .WithJobId(_jobId)
+                    .WithTaskId(_taskId);
+            }
+
             return result;
         }
 
@@ -136,14 +164,22 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
             OmitIpAddress = 1,
             OmitIdentifier = 2,
             OmitApplication = 4,
-            OmitMachineId = 8
+            OmitMachineId = 8,
+            OmitCpuCoreCount = 16,
+            OmitBatchContext = 32
         }
 
         private EntitlementVerificationRequest CreateRequest(
             string application,
-            IPAddress ipAddress)
+            IPAddress ipAddress,
+            string hostId,
+            int? cpuCoreCount)
         {
-            return new EntitlementVerificationRequest(application, ipAddress);
+            return new EntitlementVerificationRequest(application, ipAddress)
+            {
+                HostId = hostId,
+                CpuCoreCount = cpuCoreCount
+            };
         }
 
         public class ConfigurationCheck : EntitlementVerifierTests
@@ -262,7 +298,7 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
             public void WhenEntitlementContainsOnlyADifferentApplication_ReturnsError()
             {
                 var token = _generator.Generate(_completeEntitlement);
-                var request = CreateRequest(_otherApp1, _approvedAddress);
+                var request = CreateRequest(_otherApp1, _approvedAddress, _sampleHostId, _cpuCoreCountMax);
                 var result = _verifier.Verify(request, token);
                 result.HasValue.Should().BeFalse();
                 result.Errors.Should().Contain(e => e.Contains(_otherApp1));
@@ -340,6 +376,76 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
             }
         }
 
+        public class HostIdProperty : EntitlementVerifierTests
+        {
+            private class NegativeHostVerifier : IHostVerifier
+            {
+                public bool Verify(NodeEntitlements entitlement, string hostId) => false;
+            }
+
+            [Fact]
+            public void WhenHostVerifierReturnsFalse_ReturnsError()
+            {
+                var verifier = CreateEntitlementVerifier(_signingKey, _encryptingKey, new NegativeHostVerifier());
+                var token = _generator.Generate(_completeEntitlement);
+                var result = verifier.Verify(_validEntitlementRequest, token);
+                result.HasValue.Should().BeFalse();
+                result.Errors.Should().Contain($"Host {_sampleHostId} is not allowed for entitlement {_entitlementIdentifer}");
+            }
+        }
+
+        public class CpuCoreCountProperty : EntitlementVerifierTests
+        {
+            private readonly int _lowCpuCoreCount;
+            private readonly int _tooHighCpuCoreCount;
+
+            public CpuCoreCountProperty()
+            {
+                _lowCpuCoreCount = _cpuCoreCountMax - 1;
+                _tooHighCpuCoreCount = _cpuCoreCountMax + 1;
+            }
+
+            [Fact]
+            public void WhenCoreCountIsLessThanEntitlement_ReturnsMaxCoreCount()
+            {
+                var request = CreateRequest(_approvedApp, _approvedAddress, _sampleHostId, _lowCpuCoreCount);
+                var token = _generator.Generate(_completeEntitlement);
+                var result = _verifier.Verify(request, token);
+                result.HasValue.Should().BeTrue();
+                result.Value.CpuCoreCount.Should().Be(_completeEntitlement.CpuCoreCount);
+            }
+
+            [Fact]
+            public void WhenCoreCountEqualsEntitlement_ReturnsMaxCoreCount()
+            {
+                var request = CreateRequest(_approvedApp, _approvedAddress, _sampleHostId, _completeEntitlement.CpuCoreCount);
+                var token = _generator.Generate(_completeEntitlement);
+                var result = _verifier.Verify(request, token);
+                result.HasValue.Should().BeTrue();
+                result.Value.CpuCoreCount.Should().Be(_completeEntitlement.CpuCoreCount);
+            }
+
+            [Fact]
+            public void WhenCoreCountExceedsEntitlement_ReturnsError()
+            {
+                var request = CreateRequest(_approvedApp, _approvedAddress, _sampleHostId, _tooHighCpuCoreCount);
+                var token = _generator.Generate(_completeEntitlement);
+                var result = _verifier.Verify(request, token);
+                result.HasValue.Should().BeFalse();
+                result.Errors.Should().NotBeEmpty();
+            }
+
+            [Fact]
+            public void WhenEntitlementHasNoCoreCount_ReturnsError()
+            {
+                var entitlements = CreateEntitlements(EntitlementCreationOptions.OmitCpuCoreCount);
+                var token = _generator.Generate(entitlements);
+                var result = _verifier.Verify(_validEntitlementRequest, token);
+                result.HasValue.Should().BeFalse();
+                result.Errors.Should().NotBeEmpty();
+            }
+        }
+
         public class IdentifierProperty : EntitlementVerifierTests
         {
             [Fact]
@@ -373,6 +479,102 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
                 var result = _verifier.Verify(_validEntitlementRequest, token);
                 result.HasValue.Should().BeFalse();
                 result.Errors.Should().Contain(e => e.Contains("audience"));
+            }
+        }
+
+        public class BatchAccountIdProperty : EntitlementVerifierTests
+        {
+            [Fact]
+            public void WhenBatchAccountIdSpecified_ReturnsBatchAccountId()
+            {
+                var token = _generator.Generate(_completeEntitlement);
+                var result = _verifier.Verify(_validEntitlementRequest, token);
+                result.Value.BatchAccountId.Should().Be(_batchAccountId);
+            }
+
+            [Fact]
+            public void WhenBatchAccountIdOmitted_ReturnsNull()
+            {
+                var entitlements = CreateEntitlements(EntitlementCreationOptions.OmitBatchContext)
+                    .WithPoolId(_poolId)
+                    .WithJobId(_jobId)
+                    .WithTaskId(_taskId);
+                var token = _generator.Generate(entitlements);
+                var result = _verifier.Verify(_validEntitlementRequest, token);
+                result.HasValue.Should().BeTrue();
+                result.Value.BatchAccountId.Should().BeNull();
+            }
+        }
+
+        public class PoolIdProperty : EntitlementVerifierTests
+        {
+            [Fact]
+            public void WhenPoolIdSpecified_ReturnsPoolId()
+            {
+                var token = _generator.Generate(_completeEntitlement);
+                var result = _verifier.Verify(_validEntitlementRequest, token);
+                result.Value.PoolId.Should().Be(_poolId);
+            }
+
+            [Fact]
+            public void WhenPoolIdOmitted_ReturnsNull()
+            {
+                var entitlements = CreateEntitlements(EntitlementCreationOptions.OmitBatchContext)
+                    .WithBatchAccountId(_batchAccountId)
+                    .WithJobId(_jobId)
+                    .WithTaskId(_taskId);
+                var token = _generator.Generate(entitlements);
+                var result = _verifier.Verify(_validEntitlementRequest, token);
+                result.HasValue.Should().BeTrue();
+                result.Value.PoolId.Should().BeNull();
+            }
+        }
+
+        public class JobIdProperty : EntitlementVerifierTests
+        {
+            [Fact]
+            public void WhenJobIdSpecified_ReturnsJobId()
+            {
+                var token = _generator.Generate(_completeEntitlement);
+                var result = _verifier.Verify(_validEntitlementRequest, token);
+                result.Value.JobId.Should().Be(_jobId);
+            }
+
+            [Fact]
+            public void WhenJobIdOmitted_ReturnsNull()
+            {
+                var entitlements = CreateEntitlements(EntitlementCreationOptions.OmitBatchContext)
+                    .WithBatchAccountId(_batchAccountId)
+                    .WithPoolId(_poolId)
+                    .WithTaskId(_taskId);
+                var token = _generator.Generate(entitlements);
+                var result = _verifier.Verify(_validEntitlementRequest, token);
+                result.HasValue.Should().BeTrue();
+                result.Value.JobId.Should().BeNull();
+            }
+        }
+
+        public class TaskIdProperty : EntitlementVerifierTests
+        {
+            [Fact]
+            public void WhenTaskIdSpecified_ReturnsTaskId()
+            {
+                var token = _generator.Generate(_completeEntitlement);
+                var result = _verifier.Verify(_validEntitlementRequest, token);
+                result.Value.TaskId.Should().Be(_taskId);
+            }
+
+            [Fact]
+            public void WhenTaskIdOmitted_ReturnsNull()
+            {
+                var entitlements = CreateEntitlements(EntitlementCreationOptions.OmitBatchContext)
+                    .WithBatchAccountId(_batchAccountId)
+                    .WithPoolId(_poolId)
+                    .WithJobId(_jobId);
+                var token = _generator.Generate(entitlements);
+                var result = _verifier.Verify(_validEntitlementRequest, token);
+                result.HasValue.Should().BeTrue();
+                result.Value.TaskId.Should().BeNull();
             }
         }
 
