@@ -132,20 +132,27 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
 
             ReadClaim(Claims.VirtualMachineId, (e, val) => e.WithVirtualMachineId(val));
             ReadClaim(Claims.EntitlementId, (e, val) => e.WithIdentifier(val));
-            ReadClaim(Claims.CpuCoreCount, SetCpuCoreCount);
+
+            var cpuCoreCountClaim = principal.FindFirst(Claims.CpuCoreCount);
+            if (cpuCoreCountClaim != null)
+            {
+                if (int.TryParse(cpuCoreCountClaim.Value, out int cpuCoreCount))
+                {
+                    result = result.WithCpuCoreCount(cpuCoreCount);
+                }
+                else
+                {
+                    return Errorable.Failure<NodeEntitlements>(
+                        InvalidTokenError($"Invalid CPU core count claim: {cpuCoreCountClaim.Value}"));
+                }
+            }
+
             ReadClaim(Claims.BatchAccountId, (e, val) => e.WithBatchAccountId(val));
             ReadClaim(Claims.PoolId, (e, val) => e.WithPoolId(val));
             ReadClaim(Claims.JobId, (e, val) => e.WithJobId(val));
             ReadClaim(Claims.TaskId, (e, val) => e.WithTaskId(val));
 
             return Errorable.Success(result);
-        }
-
-        private static NodeEntitlements SetCpuCoreCount(NodeEntitlements entitlement, string value)
-        {
-            return int.TryParse(value, out int cpuCoreCount)
-                ? entitlement.WithCpuCoreCount(cpuCoreCount)
-                : entitlement;
         }
 
         private static string TokenNotYetValidError(DateTime notBefore)
