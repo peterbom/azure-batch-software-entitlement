@@ -63,8 +63,8 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
                 .Configure(PoolId(), (e, poolId) => e.WithPoolId(poolId))
                 .Configure(JobId(), (e, jobId) => e.WithJobId(jobId))
                 .Configure(TaskId(), (e, taskId) => e.WithTaskId(taskId))
-                .ConfigureAll(Addresses(), (e, address) => e.AddIpAddress(address))
-                .ConfigureAll(Applications(), (e, app) => e.AddApplication(app));
+                .Configure(Addresses(), (e, addresses) => e.WithIpAddresses(addresses))
+                .Configure(Applications(), (e, appIds) => e.WithApplications(appIds));
 
             return result;
         }
@@ -134,7 +134,7 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
 
         private Errorable<string> TaskId() => Errorable.Success(_commandLine.TaskId);
 
-        private IEnumerable<Errorable<IPAddress>> Addresses()
+        private Errorable<IEnumerable<IPAddress>> Addresses()
         {
             var result = new List<Errorable<IPAddress>>();
             if (_commandLine.Addresses != null)
@@ -150,7 +150,7 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
                 result.AddRange(ListMachineIpAddresses());
             }
 
-            return result;
+            return result.Reduce();
         }
 
         private static IEnumerable<Errorable<IPAddress>> ListMachineIpAddresses()
@@ -185,19 +185,15 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
             return Errorable.Failure<IPAddress>($"IP address '{address}' is not in an expected format (IPv4 and IPv6 supported).");
         }
 
-        private IEnumerable<Errorable<string>> Applications()
+        private Errorable<IEnumerable<string>> Applications()
         {
             if (_commandLine.ApplicationIds == null || !_commandLine.ApplicationIds.Any())
             {
-                yield return Errorable.Failure<string>("No applications specified.");
-                yield break;
+                return Errorable.Failure<IEnumerable<string>>("No applications specified.");
             }
 
-            var apps = _commandLine.ApplicationIds.ToList();
-            foreach (var app in apps)
-            {
-                yield return Errorable.Success(app.Trim());
-            }
+            var apps = _commandLine.ApplicationIds.Select(app => app.Trim());
+            return Errorable.Success(apps);
         }
     }
 }

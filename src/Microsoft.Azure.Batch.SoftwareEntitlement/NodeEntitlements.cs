@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Linq;
 using System.Net;
 using Microsoft.Azure.Batch.SoftwareEntitlement.Common;
 
@@ -143,33 +145,64 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
         }
 
         /// <summary>
-        /// Add an application into the list of entitled applications
+        /// Specify the entitled applications
         /// </summary>
-        /// <param name="application">Identifier of the application to add.</param>
+        /// <param name="application">Identifiers of the applications.</param>
         /// <returns>A new entitlement.</returns>
-        public NodeEntitlements AddApplication(string application)
+        public NodeEntitlements WithApplications(params string[] applications)
         {
-            if (application == null)
+            if (applications == null)
             {
-                throw new ArgumentNullException(nameof(application));
+                throw new ArgumentNullException(nameof(applications));
             }
 
-            return new NodeEntitlements(this, applications: Applications.Add(application.Trim()));
+            return WithApplications((IEnumerable<string>)applications);
         }
 
         /// <summary>
-        /// Specify the IPAddress of the entitled machine
+        /// Specify the list of entitled applications
         /// </summary>
-        /// <param name="address">IP Address of the machine to run the entitled application(s).</param>
-        /// <returns>A new entitlement</returns>
-        public NodeEntitlements AddIpAddress(IPAddress address)
+        /// <param name="application">Identifiers of the applications.</param>
+        /// <returns>A new entitlement.</returns>
+        public NodeEntitlements WithApplications(IEnumerable<string> applications)
         {
-            if (address == null)
+            if (applications == null)
             {
-                throw new ArgumentNullException(nameof(address));
+                throw new ArgumentNullException(nameof(applications));
             }
 
-            return new NodeEntitlements(this, addresses: IpAddresses.Add(address));
+            applications = applications.Select(appId => appId.Trim());
+            return new NodeEntitlements(this, applications: ImmutableHashSet.CreateRange(applications));
+        }
+
+        /// <summary>
+        /// Specify the IPAddresses of the entitled machine
+        /// </summary>
+        /// <param name="address">IP Addresses of the machine to run the entitled application(s).</param>
+        /// <returns>A new entitlement</returns>
+        public NodeEntitlements WithIpAddresses(params IPAddress[] ipAddresses)
+        {
+            if (ipAddresses == null)
+            {
+                throw new ArgumentNullException(nameof(ipAddresses));
+            }
+
+            return WithIpAddresses((IEnumerable<IPAddress>)ipAddresses);
+        }
+
+        /// <summary>
+        /// Specify the list of IPAddresses of the entitled machine
+        /// </summary>
+        /// <param name="address">IP Addresses of the machine to run the entitled application(s).</param>
+        /// <returns>A new entitlement</returns>
+        public NodeEntitlements WithIpAddresses(IEnumerable<IPAddress> ipAddresses)
+        {
+            if (ipAddresses == null)
+            {
+                throw new ArgumentNullException(nameof(ipAddresses));
+            }
+
+            return new NodeEntitlements(this, addresses: ImmutableHashSet.CreateRange(ipAddresses));
         }
 
         /// <summary>

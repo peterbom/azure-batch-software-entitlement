@@ -65,7 +65,7 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
             }
         }
 
-        public class AddApplicationMethod : NodeEntitlementsTests
+        public class WithApplicationsMethod : NodeEntitlementsTests
         {
             private const string Application = "contosoapp";
 
@@ -74,14 +74,14 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
             {
                 var exception =
                     Assert.Throws<ArgumentNullException>(
-                        () => _emptyEntitlement.AddApplication(null));
-                exception.ParamName.Should().Be("application");
+                        () => _emptyEntitlement.WithApplications(null));
+                exception.ParamName.Should().Be("applications");
             }
 
             [Fact]
             public void GivenApplicationId_AddsToConfiguration()
             {
-                var entitlement = _emptyEntitlement.AddApplication(Application);
+                var entitlement = _emptyEntitlement.WithApplications(Application);
                 entitlement.Applications.Should().HaveCount(1);
                 entitlement.Applications.Should().Contain(Application);
             }
@@ -90,8 +90,7 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
             public void GivenDuplicateApplicationId_DoesNotAddToConfiguration()
             {
                 var entitlement = _emptyEntitlement
-                    .AddApplication(Application)
-                    .AddApplication(Application);
+                    .WithApplications(Application, Application);
                 entitlement.Applications.Should().HaveCount(1);
                 entitlement.Applications.Should().Contain(Application);
             }
@@ -99,7 +98,7 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
             [Fact]
             public void GivenApplicationIdWithWhitespace_RemovesWhitespace()
             {
-                var entitlement = _emptyEntitlement.AddApplication("  " + Application + "  ");
+                var entitlement = _emptyEntitlement.WithApplications("  " + Application + "  ");
                 entitlement.Applications.Should().HaveCount(1);
                 entitlement.Applications.Should().Contain(Application.Trim());
             }
@@ -116,21 +115,21 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
             {
                 var exception =
                     Assert.Throws<ArgumentNullException>(
-                        () => _emptyEntitlement.AddIpAddress(null));
-                exception.ParamName.Should().Be("address");
+                        () => _emptyEntitlement.WithIpAddresses(null));
+                exception.ParamName.Should().Be("ipAddresses");
             }
 
             [Fact]
             public void GivenIpAddress_ModifiesConfiguration()
             {
-                var entitlement = _emptyEntitlement.AddIpAddress(_addressA);
+                var entitlement = _emptyEntitlement.WithIpAddresses(_addressA);
                 entitlement.IpAddresses.Should().Contain(_addressA);
             }
 
             [Fact]
             public void GivenSecondIpAddress_ModifiesConfiguration()
             {
-                var entitlement = _emptyEntitlement.AddIpAddress(_addressB);
+                var entitlement = _emptyEntitlement.WithIpAddresses(_addressB);
                 entitlement.IpAddresses.Should().Contain(_addressB);
             }
 
@@ -138,8 +137,7 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
             public void GivenSecondIpAddress_RetainsFirst()
             {
                 var entitlement = _emptyEntitlement
-                    .AddIpAddress(_addressA)
-                    .AddIpAddress(_addressB);
+                    .WithIpAddresses(_addressA, _addressB);
                 entitlement.IpAddresses.Should().Contain(_addressA);
             }
         }

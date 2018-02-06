@@ -114,21 +114,13 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
                 .FromInstant(_now)
                 .UntilInstant(_now + TimeSpan.FromDays(7))
                 .WithAudience(_audience)
-                .WithIssuer(_issuer);
-
-            if (!creationOptions.HasFlag(EntitlementCreationOptions.OmitIpAddress))
-            {
-                result = result.AddIpAddress(_approvedAddress);
-            }
+                .WithIssuer(_issuer)
+                .WithIpAddresses(_approvedAddress)
+                .WithApplications(_approvedApp);
 
             if (!creationOptions.HasFlag(EntitlementCreationOptions.OmitIdentifier))
             {
                 result = result.WithIdentifier(_entitlementIdentifer);
-            }
-
-            if (!creationOptions.HasFlag(EntitlementCreationOptions.OmitApplication))
-            {
-                result = result.AddApplication(_approvedApp);
             }
 
             if (!creationOptions.HasFlag(EntitlementCreationOptions.OmitMachineId))
@@ -161,12 +153,10 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
         private enum EntitlementCreationOptions
         {
             None = 0,
-            OmitIpAddress = 1,
-            OmitIdentifier = 2,
-            OmitApplication = 4,
-            OmitMachineId = 8,
-            OmitCpuCoreCount = 16,
-            OmitBatchContext = 32
+            OmitIdentifier = 1,
+            OmitMachineId = 2,
+            OmitCpuCoreCount = 4,
+            OmitBatchContext = 8
         }
 
         private EntitlementVerificationRequest CreateRequest(
@@ -307,9 +297,7 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
             [Fact]
             public void WhenEntitlementContainsMultipleApplicationsButNotTheRequestedApplication_ReturnsError()
             {
-                var entitlement = CreateEntitlements(EntitlementCreationOptions.OmitApplication)
-                    .AddApplication(_otherApp1)
-                    .AddApplication(_otherApp2);
+                var entitlement = _completeEntitlement.WithApplications(_otherApp1, _otherApp2);
                 var token = _generator.Generate(entitlement);
 
                 var result = _verifier.Verify(_validEntitlementRequest, token);
@@ -320,9 +308,7 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
             [Fact]
             public void WhenEntitlementContainsMultipleApplicationsIncludingTheRequestedApplication_ReturnsExpectedApplication()
             {
-                var entitlement = _completeEntitlement
-                    .AddApplication(_otherApp1)
-                    .AddApplication(_otherApp2);
+                var entitlement = _completeEntitlement.WithApplications(_approvedApp, _otherApp1, _otherApp2);
                 var token = _generator.Generate(entitlement);
 
                 var result = _verifier.Verify(_validEntitlementRequest, token);
@@ -333,7 +319,7 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
             [Fact]
             public void WhenEntitlementContainsNoApplications_ReturnsError()
             {
-                var entitlements = CreateEntitlements(EntitlementCreationOptions.OmitApplication);
+                var entitlements = _completeEntitlement.WithApplications();
                 var token = _generator.Generate(entitlements);
                 var result = _verifier.Verify(_validEntitlementRequest, token);
                 result.HasValue.Should().BeFalse();
@@ -357,8 +343,7 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
             [Fact]
             public void WhenEntitlementContainsOtherIp_ReturnsError()
             {
-                var entitlements = CreateEntitlements(EntitlementCreationOptions.OmitIpAddress)
-                    .AddIpAddress(_otherAddress);
+                var entitlements = _completeEntitlement.WithIpAddresses(_otherAddress);
                 var token = _generator.Generate(entitlements);
                 var result = _verifier.Verify(_validEntitlementRequest, token);
                 result.HasValue.Should().BeFalse();
@@ -368,7 +353,7 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Tests
             [Fact]
             public void WhenEntitlementHasNoIp_ReturnsError()
             {
-                var entitlements = CreateEntitlements(EntitlementCreationOptions.OmitIpAddress);
+                var entitlements = _completeEntitlement.WithIpAddresses();
                 var token = _generator.Generate(entitlements);
                 var result = _verifier.Verify(_validEntitlementRequest, token);
                 result.HasValue.Should().BeFalse();

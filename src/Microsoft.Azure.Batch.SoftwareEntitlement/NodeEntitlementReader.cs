@@ -104,22 +104,18 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
                 result = result.WithIssuedAt(EpochTime.DateTime(iat.Value));
             }
 
-            foreach (var applicationClaim in principal.FindAll(Claims.Application))
+            var applicationIds = principal.FindAll(Claims.Application).Select(c => c.Value);
+            result = result.WithApplications(applicationIds);
+
+            var addresses = principal.FindAll(Claims.IpAddress).Select(c => ParseIpAddress(c.Value)).Reduce();
+            if (addresses.Errors.Any())
             {
-                result = result.AddApplication(applicationClaim.Value);
+                return Errorable.Failure<NodeEntitlements>(addresses.Errors);
             }
 
-            foreach (var ipClaim in principal.FindAll(Claims.IpAddress))
-            {
-                if (IPAddress.TryParse(ipClaim.Value, out var parsedAddress))
-                {
-                    result = result.AddIpAddress(parsedAddress);
-                }
-                else
-                {
-                    return Errorable.Failure<NodeEntitlements>(InvalidTokenError($"Invalid IP claim: {ipClaim.Value}"));
-                }
-            }
+            result = addresses.Match(
+                whenSuccessful: a => result.WithIpAddresses(a),
+                whenFailure: errors => result);
 
             void ReadClaim(string claimId, Func<NodeEntitlements, string, NodeEntitlements> action)
             {
@@ -153,6 +149,13 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
             ReadClaim(Claims.TaskId, (e, val) => e.WithTaskId(val));
 
             return Errorable.Success(result);
+        }
+
+        private static Errorable<IPAddress> ParseIpAddress(string value)
+        {
+            return IPAddress.TryParse(value, out var parsedAddress)
+                ? Errorable.Success(parsedAddress)
+                : Errorable.Failure<IPAddress>(InvalidTokenError($"Invalid IP claim: {value}"));
         }
 
         private static string TokenNotYetValidError(DateTime notBefore)
