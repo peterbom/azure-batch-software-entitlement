@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
@@ -84,74 +85,77 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
 
         private static Errorable<NodeEntitlements> ReadClaims(ClaimsPrincipal principal, SecurityToken token)
         {
-            // Set standard claims from token: NotBefore, NotAfter and Issuer
-            var result = new NodeEntitlements()
-                .FromInstant(new DateTimeOffset(token.ValidFrom))
-                .UntilInstant(new DateTimeOffset(token.ValidTo))
-                .WithIssuer(token.Issuer);
-
-            // We don't expect multiple audiences to appear in the token
             var jwt = token as JwtSecurityToken;
-            var audience = jwt?.Audiences?.SingleOrDefault();
-            if (audience != null)
+
+            NodeEntitlements SetAudience(NodeEntitlements entitlement)
             {
-                result = result.WithAudience(audience);
+                // We don't expect multiple audiences to appear in the token
+                var audience = jwt?.Audiences?.SingleOrDefault();
+                return audience != null
+                    ? entitlement.WithAudience(audience)
+                    : entitlement;
             }
 
-            var iat = jwt?.Payload.Iat;
-            if (iat.HasValue)
+            NodeEntitlements SetIssuedAt(NodeEntitlements entitlement)
             {
-                result = result.WithIssuedAt(EpochTime.DateTime(iat.Value));
+                var iat = jwt?.Payload.Iat;
+                return iat.HasValue
+                    ? entitlement.WithIssuedAt(EpochTime.DateTime(iat.Value))
+                    : entitlement;
             }
 
-            var applicationIds = principal.FindAll(Claims.Application).Select(c => c.Value);
-            result = result.WithApplications(applicationIds);
-
-            var addresses = principal.FindAll(Claims.IpAddress).Select(c => ParseIpAddress(c.Value)).Reduce();
-            if (addresses.Errors.Any())
+            Errorable<string> OptionalClaim(string claimType)
             {
-                return Errorable.Failure<NodeEntitlements>(addresses.Errors);
+                return OptionalErrorableClaim(claimType, val => Errorable.Success(val));
             }
 
-            result = addresses.Match(
-                whenSuccessful: a => result.WithIpAddresses(a),
-                whenFailure: errors => result);
-
-            void ReadClaim(string claimId, Func<NodeEntitlements, string, NodeEntitlements> action)
+            Errorable<T> OptionalErrorableClaim<T>(string claimType, Func<string, Errorable<T>> parseValue)
             {
-                var claim = principal.FindFirst(claimId);
+                var claim = principal.FindFirst(claimType);
                 if (claim != null)
                 {
-                    result = action(result, claim.Value);
+                    return parseValue(claim.Value);
                 }
+
+                return Errorable.Success<T>(default);
             }
 
-            ReadClaim(Claims.VirtualMachineId, (e, val) => e.WithVirtualMachineId(val));
-            ReadClaim(Claims.EntitlementId, (e, val) => e.WithIdentifier(val));
-
-            var cpuCoreCountClaim = principal.FindFirst(Claims.CpuCoreCount);
-            if (cpuCoreCountClaim != null)
+            Errorable<IEnumerable<string>> MultipleClaims(string claimType)
             {
-                if (int.TryParse(cpuCoreCountClaim.Value, out int cpuCoreCount))
-                {
-                    result = result.WithCpuCoreCount(cpuCoreCount);
-                }
-                else
-                {
-                    return Errorable.Failure<NodeEntitlements>(
-                        InvalidTokenError($"Invalid CPU core count claim: {cpuCoreCountClaim.Value}"));
-                }
+                return MultipleErrorableClaims(claimType, val => Errorable.Success(val));
             }
 
-            ReadClaim(Claims.BatchAccountId, (e, val) => e.WithBatchAccountId(val));
-            ReadClaim(Claims.PoolId, (e, val) => e.WithPoolId(val));
-            ReadClaim(Claims.JobId, (e, val) => e.WithJobId(val));
-            ReadClaim(Claims.TaskId, (e, val) => e.WithTaskId(val));
+            Errorable<IEnumerable<T>> MultipleErrorableClaims<T>(string claimType, Func<string, Errorable<T>> parseValue)
+            {
+                var valueResults = principal.FindAll(claimType).Select(claim => parseValue(claim.Value));
+                return valueResults.Reduce();
+            }
 
-            return Errorable.Success(result);
+            return Errorable.Success(new NodeEntitlements())
+                .Bind(e => e.FromInstant(new DateTimeOffset(token.ValidFrom)))
+                .Bind(e => e.UntilInstant(new DateTimeOffset(token.ValidTo)))
+                .Bind(e => e.WithIssuer(token.Issuer))
+                .Bind(SetAudience)
+                .Bind(SetIssuedAt)
+                .With(MultipleClaims(Claims.Application)).Map((e, vals) => e.WithApplications(vals))
+                .With(MultipleErrorableClaims(Claims.IpAddress, ParseIpAddresses)).Map((e, vals) => e.WithIpAddresses(vals))
+                .With(OptionalClaim(Claims.VirtualMachineId)).Map((e, val) => e.WithVirtualMachineId(val))
+                .With(OptionalClaim(Claims.EntitlementId)).Map((e, val) => e.WithIdentifier(val))
+                .With(OptionalErrorableClaim(Claims.CpuCoreCount, ParseCpuCoreCount)).Map((e, val) => e.WithCpuCoreCount(val))
+                .With(OptionalClaim(Claims.BatchAccountId)).Map((e, val) => e.WithBatchAccountId(val))
+                .With(OptionalClaim(Claims.PoolId)).Map((e, val) => e.WithPoolId(val))
+                .With(OptionalClaim(Claims.JobId)).Map((e, val) => e.WithJobId(val))
+                .With(OptionalClaim(Claims.TaskId)).Map((e, val) => e.WithTaskId(val));
         }
 
-        private static Errorable<IPAddress> ParseIpAddress(string value)
+        private static Errorable<int> ParseCpuCoreCount(string value)
+        {
+            return int.TryParse(value, out int cpuCoreCount)
+                ? Errorable.Success(cpuCoreCount)
+                : Errorable.Failure<int>(InvalidTokenError($"Invalid CPU core count claim: {value}"));
+        }
+
+        private static Errorable<IPAddress> ParseIpAddresses(string value)
         {
             return IPAddress.TryParse(value, out var parsedAddress)
                 ? Errorable.Success(parsedAddress)
