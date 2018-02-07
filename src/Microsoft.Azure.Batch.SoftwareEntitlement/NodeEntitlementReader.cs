@@ -84,71 +84,49 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
 
         private static Errorable<NodeEntitlements> ReadClaims(ClaimsPrincipal principal, SecurityToken token)
         {
-            // Set standard claims from token: NotBefore, NotAfter and Issuer
-            var result = new NodeEntitlements()
-                .FromInstant(new DateTimeOffset(token.ValidFrom))
-                .UntilInstant(new DateTimeOffset(token.ValidTo))
-                .WithIssuer(token.Issuer);
-
-            // We don't expect multiple audiences to appear in the token
             var jwt = token as JwtSecurityToken;
-            var audience = jwt?.Audiences?.SingleOrDefault();
-            if (audience != null)
+
+            NodeEntitlements SetAudience(NodeEntitlements entitlement)
             {
-                result = result.WithAudience(audience);
+                // We don't expect multiple audiences to appear in the token
+                var audience = jwt?.Audiences?.SingleOrDefault();
+                return audience != null
+                    ? entitlement.WithAudience(audience)
+                    : entitlement;
             }
 
-            var iat = jwt?.Payload.Iat;
-            if (iat.HasValue)
+            NodeEntitlements SetIssuedAt(NodeEntitlements entitlement)
             {
-                result = result.WithIssuedAt(EpochTime.DateTime(iat.Value));
+                var iat = jwt?.Payload.Iat;
+                return iat.HasValue
+                    ? entitlement.WithIssuedAt(EpochTime.DateTime(iat.Value))
+                    : entitlement;
             }
 
-            var applicationIds = principal.FindAll(Claims.Application).Select(c => c.Value);
-            result = result.WithApplications(applicationIds);
+            return Errorable.Success(new NodeEntitlements())
+                .Bind(e => e.FromInstant(new DateTimeOffset(token.ValidFrom)))
+                .Bind(e => e.UntilInstant(new DateTimeOffset(token.ValidTo)))
+                .Bind(e => e.WithIssuer(token.Issuer))
+                .Bind(SetAudience)
+                .Bind(SetIssuedAt)
+                .WithClaimsReader(principal)
+                .ReadMultiple(Claims.Application, (e, vals) => e.WithApplications(vals))
+                .ReadMultiple(Claims.IpAddress, ParseIpAddress, (e, vals) => e.WithIpAddresses(vals))
+                .ReadOptional(Claims.VirtualMachineId, (e, val) => e.WithVirtualMachineId(val))
+                .ReadOptional(Claims.CpuCoreCount, ParseCpuCoreCount, (e, val) => e.WithCpuCoreCount(val))
+                .ReadOptional(Claims.EntitlementId, (e, val) => e.WithIdentifier(val))
+                .ReadOptional(Claims.BatchAccountId, (e, val) => e.WithBatchAccountId(val))
+                .ReadOptional(Claims.PoolId, (e, val) => e.WithPoolId(val))
+                .ReadOptional(Claims.JobId, (e, val) => e.WithJobId(val))
+                .ReadOptional(Claims.TaskId, (e, val) => e.WithTaskId(val))
+                .Result;
+        }
 
-            var addresses = principal.FindAll(Claims.IpAddress).Select(c => ParseIpAddress(c.Value)).Reduce();
-            if (addresses.Errors.Any())
-            {
-                return Errorable.Failure<NodeEntitlements>(addresses.Errors);
-            }
-
-            result = addresses.Match(
-                whenSuccessful: a => result.WithIpAddresses(a),
-                whenFailure: errors => result);
-
-            void ReadClaim(string claimId, Func<NodeEntitlements, string, NodeEntitlements> action)
-            {
-                var claim = principal.FindFirst(claimId);
-                if (claim != null)
-                {
-                    result = action(result, claim.Value);
-                }
-            }
-
-            ReadClaim(Claims.VirtualMachineId, (e, val) => e.WithVirtualMachineId(val));
-            ReadClaim(Claims.EntitlementId, (e, val) => e.WithIdentifier(val));
-
-            var cpuCoreCountClaim = principal.FindFirst(Claims.CpuCoreCount);
-            if (cpuCoreCountClaim != null)
-            {
-                if (int.TryParse(cpuCoreCountClaim.Value, out int cpuCoreCount))
-                {
-                    result = result.WithCpuCoreCount(cpuCoreCount);
-                }
-                else
-                {
-                    return Errorable.Failure<NodeEntitlements>(
-                        InvalidTokenError($"Invalid CPU core count claim: {cpuCoreCountClaim.Value}"));
-                }
-            }
-
-            ReadClaim(Claims.BatchAccountId, (e, val) => e.WithBatchAccountId(val));
-            ReadClaim(Claims.PoolId, (e, val) => e.WithPoolId(val));
-            ReadClaim(Claims.JobId, (e, val) => e.WithJobId(val));
-            ReadClaim(Claims.TaskId, (e, val) => e.WithTaskId(val));
-
-            return Errorable.Success(result);
+        private static Errorable<int> ParseCpuCoreCount(string coreCount)
+        {
+            return int.TryParse(coreCount, out var result)
+                ? Errorable.Success(result)
+                : Errorable.Failure<int>($"Invalid CPU core count: {coreCount}");
         }
 
         private static Errorable<IPAddress> ParseIpAddress(string value)
