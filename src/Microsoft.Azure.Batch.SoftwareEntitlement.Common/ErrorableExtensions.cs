@@ -426,5 +426,8 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Common
                 Errorable.Success(Enumerable.Empty<T>()),
                 (result, errorable) => result.With(errorable).Map((items, item) => items.Concat(new[] { item })));
         }
+
+        public static Errorable<TNew> Bind<T, TNew>(this Errorable<T> errorable, Func<T, TNew> whenSuccessful)
+            => errorable.Bind(val => Errorable.Success(whenSuccessful(val)));
     }
 }
