@@ -46,14 +46,10 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
         /// <see cref="Errorable.Failure{NodeEntitlements}"/> if it failed to validate correctly.
         /// </returns>
         public Errorable<NodeEntitlements> Parse(string token)
-        {
-            return ExtractJwt(token).Map(CreateEntitlementPropertyProvider).Bind(NodeEntitlements.Build);
-        }
-
-        private static IEntitlementPropertyProvider CreateEntitlementPropertyProvider(ClaimsPrincipal principal, JwtSecurityToken jwt)
-        {
-            return new JwtEntitlementPropertyProvider(principal, jwt);
-        }
+            => from pair in ExtractJwt(token)
+               let provider = new JwtEntitlementPropertyProvider(pair.Principal, pair.Token)
+               from entitlements in NodeEntitlements.Build(provider)
+               select entitlements;
 
         private Errorable<(ClaimsPrincipal Principal, JwtSecurityToken Token)> ExtractJwt(string tokenString)
         {
@@ -72,9 +68,6 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
                 TokenDecryptionKey = _encryptionKey
             };
 
-            Errorable<(ClaimsPrincipal Principal, JwtSecurityToken Token)> Failure(string error)
-                => Errorable.Failure<(ClaimsPrincipal Principal, JwtSecurityToken Token)>(error);
-
             try
             {
                 var handler = new JwtSecurityTokenHandler();
@@ -82,34 +75,34 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
 
                 if (!(token is JwtSecurityToken jwt))
                 {
-                    return Failure("Validated security token is expected to be a JWT");
+                    return "Validated security token is expected to be a JWT";
                 }
 
-                return Errorable.Success((principal, jwt));
+                return (principal, jwt);
             }
             catch (SecurityTokenNotYetValidException exception)
             {
-                return Failure(TokenNotYetValidError(exception.NotBefore));
+                return TokenNotYetValidError(exception.NotBefore);
             }
             catch (SecurityTokenExpiredException exception)
             {
-                return Failure(TokenExpiredError(exception.Expires));
+                return TokenExpiredError(exception.Expires);
             }
             catch (SecurityTokenNoExpirationException)
             {
-                return Failure(MissingExpirationError());
+                return MissingExpirationError();
             }
             catch (SecurityTokenInvalidIssuerException exception)
             {
-                return Failure(UnexpectedIssuerError(exception.InvalidIssuer));
+                return UnexpectedIssuerError(exception.InvalidIssuer);
             }
             catch (SecurityTokenInvalidAudienceException exception)
             {
-                return Failure(UnexpectedAudienceError(exception.InvalidAudience));
+                return UnexpectedAudienceError(exception.InvalidAudience);
             }
             catch (Exception exception)
             {
-                return Failure(InvalidTokenError(exception.Message));
+                return InvalidTokenError(exception.Message);
             }
         }
 

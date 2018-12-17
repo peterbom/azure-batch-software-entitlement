@@ -17,9 +17,7 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Common
         /// <param name="value">Result value to wrap.</param>
         /// <returns>An errorable containing the provided value.</returns>
         public static Errorable<T> Success<T>(T value)
-        {
-            return new Errorable<T>.SuccessImplementation(value);
-        }
+            => Errorable<T>.CreateSuccess(value);
 
         /// <summary>
         /// Create a value that represents a failed operation
@@ -28,10 +26,7 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Common
         /// <param name="errors">Sequence of error messages.</param>
         /// <returns>An errorable containing the specified errors.</returns>
         public static Errorable<T> Failure<T>(IEnumerable<string> errors)
-        {
-            var errorSet = ImmutableHashSet<string>.Empty.Union(errors);
-            return new Errorable<T>.FailureImplementation(errorSet);
-        }
+            => Errorable<T>.CreateFailure(errors);
 
         /// <summary>
         /// Create a value that represents a failed operation
@@ -40,211 +35,114 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Common
         /// <param name="error">Sequence of error messages.</param>
         /// <returns>An errorable containing the specified error.</returns>
         public static Errorable<T> Failure<T>(string error)
-        {
-            var errors = ImmutableHashSet<string>.Empty.Add(error);
-            return new Errorable<T>.FailureImplementation(errors);
-        }
+            => Errorable<T>.CreateFailure(error);
     }
 
     /// <summary>
     /// A container that either contains a value or a set of errors
     /// </summary>
     /// <typeparam name="T">The type of value contained in the successful case.</typeparam>
-    public abstract class Errorable<T>
+    public class Errorable<T>
     {
         /// <summary>
-        /// Gets a value indicating whether we have a value
+        /// A value indicating whether we have a value
         /// </summary>
-        public abstract bool HasValue { get; }
+        private readonly bool _hasValue;
 
         /// <summary>
-        /// Gets the value wrapped by this <see cref="Errorable{T}"/>
+        /// The value wrapped by this <see cref="Errorable{T}"/>
         /// </summary>
         /// <exception cref="InvalidOperationException">If no value is available.</exception>
-        public abstract T Value { get; }
+        private readonly T _value;
 
         /// <summary>
         /// Gets the (possibly empty) set of errors reported
         /// </summary>
-        public abstract ImmutableHashSet<string> Errors { get; }
+        private readonly ImmutableHashSet<string> _errors;
 
-        /// <summary>
-        /// Add an error
-        /// </summary>
-        /// <remarks>Will abandon any wrapped value if this is the first error encountered.</remarks>
-        /// <param name="message">Error to record.</param>
-        /// <returns>A new instance with the error included.</returns>
-        public abstract Errorable<T> AddError(string message);
-
-        /// <summary>
-        /// Add a sequence of errors
-        /// </summary>
-        /// <remarks>Will abandon any wrapped value if these are first errors encountered.</remarks>
-        /// <param name="errors">Errors to record.</param>
-        /// <returns>A new instance with unique errors included.</returns>
-        public Errorable<T> AddErrors(IEnumerable<string> errors)
+        private Errorable(
+            T value,
+            ImmutableHashSet<string> errors,
+            bool hasValue)
         {
-            var errorSet = errors.Aggregate(
-                Errors,
-                (s, e) => s.Add(e));
-            return new FailureImplementation(errorSet);
+            _value = value;
+            _errors = errors;
+            _hasValue = hasValue;
         }
 
-        /// <summary>
-        /// Take an action depending on whether we have a value or some errors
-        /// </summary>
-        /// <param name="whenSuccessful">Action to take when we have a value.</param>
-        /// <param name="whenFailure">Action to take when we have errors.</param>
-        public abstract void Match(Action<T> whenSuccessful, Action<IEnumerable<string>> whenFailure);
+        public static Errorable<T> CreateSuccess(T value)
+            => new Errorable<T>(value, ImmutableHashSet.Create<string>(), true);
+
+        public static Errorable<T> CreateFailure(IEnumerable<string> errors)
+            => CreateFailure(errors.ToArray());
+
+        public static Errorable<T> CreateFailure(params string[] errors)
+        {
+            if (errors == null)
+            {
+                throw new ArgumentNullException(nameof(errors));
+            }
+
+            if (errors.Length == 0)
+            {
+                throw new ArgumentException("At least one error must be specified.");
+            }
+
+            return new Errorable<T>(default, ImmutableHashSet.Create(errors), false);
+        }
 
         /// <summary>
         /// Call one function or another depending on whether we have a value or some errors
         /// </summary>
         /// <remarks>Both functions must return the same type.</remarks>
-        /// <typeparam name="R">Type of value to return.</typeparam>
+        /// <typeparam name="TNext">Type of value to return.</typeparam>
         /// <param name="whenSuccessful">Function to call when we have a value.</param>
         /// <param name="whenFailure">Function to call when we have errors.</param>
         /// <returns>The result of the function that was called.</returns>
-        public abstract R Match<R>(Func<T, R> whenSuccessful, Func<IEnumerable<string>, R> whenFailure);
+        private TNext Match<TNext>(
+            Func<T, TNext> whenSuccessful,
+            Func<IEnumerable<string>, TNext> whenFailure)
+            => _hasValue ? whenSuccessful(_value) : whenFailure(_errors);
+
+        public Errorable<TNext> Then<TNext>(Func<T, TNext> operation)
+        {
+            if (operation == null)
+            {
+                throw new ArgumentNullException(nameof(operation));
+            }
+
+            return Match(
+                whenSuccessful: t => (Errorable<TNext>)operation(t),
+                whenFailure: t => Errorable<TNext>.CreateFailure(_errors));
+        }
 
         /// <summary>
         /// Executes a function returning an <see cref="Errorable{T}"/> conditionally, depending
         /// on the result of this <see cref="Errorable{T}"/> instance.
         /// </summary>
-        /// <typeparam name="TNew">The return type of <paramref name="whenSuccessful"/></typeparam>
-        /// <param name="whenSuccessful">A function to execute on the value of this instance if it
+        /// <typeparam name="TNew">The return type of <paramref name="operation"/></typeparam>
+        /// <param name="operation">A function to execute on the value of this instance if it
         /// is successful</param>
         /// <returns>
-        /// An <see cref="Errorable{T}"/> containing the result of executing <paramref name="whenSuccessful"/>
+        /// An <see cref="Errorable{T}"/> containing the result of executing <paramref name="operation"/>
         /// if the input was sucessful, or the errors from this instance otherwise.
         /// </returns>
-        public abstract Errorable<TNew> Bind<TNew>(Func<T, Errorable<TNew>> whenSuccessful);
-
-        /// <summary>
-        /// Private constructor to prevent other subclasses
-        /// </summary>
-        private Errorable()
+        public Errorable<TNext> Then<TNext>(Func<T, Errorable<TNext>> operation)
         {
+            if (operation == null)
+            {
+                throw new ArgumentNullException(nameof(operation));
+            }
+
+            return Match(
+                whenSuccessful: t => operation(t),
+                whenFailure: errors => Errorable<TNext>.CreateFailure(errors));
         }
 
-        /// <summary>
-        /// An implementation of <see cref="Errorable{T}"/> that represents an actual value
-        /// </summary>
-        internal sealed class SuccessImplementation : Errorable<T>
-        {
-            public SuccessImplementation(T value)
-            {
-                Value = value;
-            }
+        public static implicit operator Errorable<T>(T value)
+            => CreateSuccess(value);
 
-            public override bool HasValue => true;
-
-            public override T Value { get; }
-
-            public override ImmutableHashSet<string> Errors => ImmutableHashSet<string>.Empty;
-
-            public override Errorable<T> AddError(string message)
-            {
-                var errors = ImmutableHashSet<string>.Empty.Add(message);
-                return new FailureImplementation(errors);
-            }
-
-            /// <summary>
-            /// Take an action depending on whether we have a value or some errors
-            /// </summary>
-            /// <param name="whenSuccessful">Action to take when we have a value.</param>
-            /// <param name="whenFailure">Action to take when we have errors.</param>
-            public override void Match(Action<T> whenSuccessful, Action<IEnumerable<string>> whenFailure)
-            {
-                whenSuccessful(Value);
-            }
-
-            /// <summary>
-            /// Call one function or another depending on whether we have a value or some errors
-            /// </summary>
-            /// <typeparam name="R">Type of value to return.</typeparam>
-            /// <param name="whenSuccessful">Function to call when we have a value.</param>
-            /// <param name="whenFailure">Function to call when we have errors.</param>
-            /// <returns>The result of applying the appropriate function.</returns>
-            public override R Match<R>(Func<T, R> whenSuccessful, Func<IEnumerable<string>, R> whenFailure)
-            {
-                return whenSuccessful(Value);
-            }
-
-            /// <summary>
-            /// Executes the specified function returning an <see cref="Errorable{T}"/>.
-            /// </summary>
-            /// <typeparam name="TNew">The return type of <paramref name="whenSuccessful"/></typeparam>
-            /// <param name="whenSuccessful">A function to execute on the value of this instance</param>
-            /// <returns>
-            /// An <see cref="Errorable{T}"/> containing the result of executing <paramref name="whenSuccessful"/>.
-            /// </returns>
-            public override Errorable<TNew> Bind<TNew>(Func<T, Errorable<TNew>> whenSuccessful)
-            {
-                if (whenSuccessful == null)
-                {
-                    throw new ArgumentNullException(nameof(whenSuccessful));
-                }
-
-                return whenSuccessful(Value);
-            }
-        }
-
-        /// <summary>
-        /// An implementation of <see cref="Errorable{T}"/> that represents a set of errors from a
-        /// failed operation
-        /// </summary>
-        internal sealed class FailureImplementation : Errorable<T>
-        {
-            public FailureImplementation(ImmutableHashSet<string> errors)
-            {
-                Errors = errors;
-            }
-
-            public override bool HasValue => false;
-
-            public override T Value => throw new InvalidOperationException($"No value of type {typeof(T).Name} available.");
-
-            public override ImmutableHashSet<string> Errors { get; }
-
-            public override Errorable<T> AddError(string message)
-            {
-                return new FailureImplementation(Errors.Add(message));
-            }
-
-            /// <summary>
-            /// Take an action depending on whether we have a value or some errors
-            /// </summary>
-            /// <param name="whenSuccessful">Action to take when we have a value.</param>
-            /// <param name="whenFailure">Action to take when we have errors.</param>
-            public override void Match(Action<T> whenSuccessful, Action<IEnumerable<string>> whenFailure)
-            {
-                whenFailure(Errors);
-            }
-
-            /// <summary>
-            /// Call one function or another depending on whether we have a value or some errors
-            /// </summary>
-            /// <typeparam name="R">Type of value to return.</typeparam>
-            /// <param name="whenSuccessful">Function to call when we have a value.</param>
-            /// <param name="whenFailure">Function to call when we have errors.</param>
-            /// <returns>The result of applying the appropriate function.</returns>
-            public override R Match<R>(Func<T, R> whenSuccessful, Func<IEnumerable<string>, R> whenFailure)
-            {
-                return whenFailure(Errors);
-            }
-
-            /// <summary>
-            /// Returns an <see cref="Errorable{T}"/> containing the existing errors.
-            /// </summary>
-            /// <typeparam name="TNew">The return type of <paramref name="whenSuccessful"/></typeparam>
-            /// <param name="whenSuccessful">A function that would be executed on the value of this instance
-            /// if it wasn't a failure.</param>
-            /// <returns>
-            /// The existing errors.
-            /// </returns>
-            public override Errorable<TNew> Bind<TNew>(Func<T, Errorable<TNew>> whenSuccessful)
-                => Errorable.Failure<TNew>(Errors);
-        }
+        public static implicit operator Errorable<T>(string error)
+            => CreateFailure(error);
     }
 }

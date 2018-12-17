@@ -39,7 +39,7 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
 
             return _entitlementParser
                 .Parse(token)
-                .Bind(e => Verify(request, e));
+                .Then(e => Verify(request, e));
         }
 
         private static Errorable<NodeEntitlements> Verify(
@@ -48,15 +48,15 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
         {
             if (!entitlement.Applications.Any(a => string.Equals(a, request.ApplicationId, StringComparison.OrdinalIgnoreCase)))
             {
-                return Errorable.Failure<NodeEntitlements>($"Token does not grant entitlement for {request.ApplicationId}");
+                return $"Token does not grant entitlement for {request.ApplicationId}";
             }
 
             if (!entitlement.IpAddresses.Any(addr => addr.Equals(request.IpAddress)))
             {
-                return Errorable.Failure<NodeEntitlements>($"Token does not grant entitlement for {request.IpAddress}");
+                return $"Token does not grant entitlement for {request.IpAddress}";
             }
 
-            return Errorable.Success(entitlement);
+            return entitlement;
         }
     }
 }

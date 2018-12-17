@@ -37,23 +37,23 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
             var iat = _jwt.Payload.Iat;
             if (!iat.HasValue)
             {
-                return Errorable.Failure<DateTimeOffset>("Missing issued-at claim on token.");
+                return "Missing issued-at claim on token.";
             }
 
-            return Errorable.Success<DateTimeOffset>(EpochTime.DateTime(iat.Value));
+            return (DateTimeOffset)EpochTime.DateTime(iat.Value);
         }
 
         /// <summary>
         /// Gets the earliest moment at which the entitlement is active from the 'nbf' claim on the JWT.
         /// </summary>
         public Errorable<DateTimeOffset> NotBefore()
-            => Errorable.Success(new DateTimeOffset(_jwt.ValidFrom));
+            => (DateTimeOffset)_jwt.ValidFrom;
 
         /// <summary>
         /// Gets the latest moment at which the entitlement is active from the 'exp' claim on the JWT.
         /// </summary>
         public Errorable<DateTimeOffset> NotAfter()
-            => Errorable.Success(new DateTimeOffset(_jwt.ValidTo));
+            => (DateTimeOffset)_jwt.ValidTo;
 
         /// <summary>
         /// Gets the audience for whom the entitlement is intended from the 'aud' claim on the JWT, or

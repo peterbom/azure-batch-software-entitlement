@@ -66,19 +66,26 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
             IpAddresses = ImmutableHashSet<IPAddress>.Empty;
         }
 
-        public static Errorable<NodeEntitlements> Build(IEntitlementPropertyProvider provider)
-        {
-            return Errorable.Success(new NodeEntitlements())
-                .With(provider.NotBefore()).Map((e, val) => e.FromInstant(val))
-                .With(provider.NotAfter()).Map((e, val) => e.UntilInstant(val))
-                .With(provider.IssuedAt()).Map((e, val) => e.WithIssuedAt(val))
-                .With(provider.Issuer()).Map((e, val) => e.WithIssuer(val))
-                .With(provider.Audience()).Map((e, val) => e.WithAudience(val))
-                .With(provider.ApplicationIds()).Map((e, vals) => e.WithApplications(vals))
-                .With(provider.IpAddresses()).Map((e, vals) => e.WithIpAddresses(vals))
-                .With(provider.VirtualMachineId()).Map((e, val) => e.WithVirtualMachineId(val))
-                .With(provider.EntitlementId()).Map((e, val) => e.WithIdentifier(val));
-        }
+        public static Errorable<NodeEntitlements> Build(IEntitlementPropertyProvider provider) =>
+            from notBefore in provider.NotBefore()
+            from notAfter in provider.NotAfter()
+            from issuedAt in provider.IssuedAt()
+            from issuer in provider.Issuer()
+            from audience in provider.Audience()
+            from applicationIds in provider.ApplicationIds()
+            from ipAddresses in provider.IpAddresses()
+            from vmid in provider.VirtualMachineId()
+            from entitlementId in provider.EntitlementId()
+            select new NodeEntitlements()
+                .FromInstant(notBefore)
+                .UntilInstant(notAfter)
+                .WithIssuedAt(issuedAt)
+                .WithIssuer(issuer)
+                .WithAudience(audience)
+                .WithApplications(applicationIds)
+                .WithIpAddresses(ipAddresses)
+                .WithVirtualMachineId(vmid)
+                .WithIdentifier(entitlementId);
 
         /// <summary>
         /// Specify the virtual machine Id of the machine
