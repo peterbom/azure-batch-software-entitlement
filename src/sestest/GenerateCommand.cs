@@ -32,13 +32,23 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
         {
             var provider = new CommandLineEntitlementPropertyProvider(commandLine);
 
-            var resultCodeOrFailure =
-                from props in EntitlementTokenProperties.Build(provider)
-                join signingCert in FindCertificate("signing", commandLine.SignatureThumbprint) on true equals true
-                join encryptionCert in FindCertificate("encryption", commandLine.EncryptionThumbprint) on true equals true
-                let token = GenerateToken(props, signingCert, encryptionCert)
-                let resultCode = ReturnToken(token, commandLine)
-                select resultCode;
+            var resultCodeOrFailure = EntitlementTokenProperties.Build(provider)
+                .With(FindCertificate("signing", commandLine.SignatureThumbprint), (props, signingCert) => new
+                {
+                    Props = props,
+                    SigningCert = signingCert
+                })
+                .With(FindCertificate("encryption", commandLine.EncryptionThumbprint), (x, encryptionCert) => new
+                {
+                    x.Props,
+                    x.SigningCert,
+                    EncryptionCert = encryptionCert
+                })
+                .OnOk(x =>
+                {
+                    var token = GenerateToken(x.Props, x.SigningCert, x.EncryptionCert);
+                    return ReturnToken(token, commandLine);
+                });
 
             return resultCodeOrFailure.LogIfFailed(Logger, ResultCodes.Failed);
         }

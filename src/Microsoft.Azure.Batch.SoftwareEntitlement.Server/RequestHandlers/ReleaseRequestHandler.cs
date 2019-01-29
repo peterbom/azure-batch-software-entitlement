@@ -23,13 +23,14 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Server.RequestHandlers
         {
             var entitlementId = requestContext;
 
-            return
-            (
-                from found in FindEntitlement(entitlementId)
-                let releaseTime = DateTime.UtcNow
-                from released in StoreRelease(entitlementId, releaseTime)
-                select CreateSuccessResponse()
-            ).Merge();
+            return FindEntitlement(entitlementId)
+                .OnOk(_ =>
+                {
+                    var releaseTime = DateTime.UtcNow;
+                    return StoreRelease(entitlementId, releaseTime);
+                })
+                .OnOk(_ => CreateSuccessResponse())
+                .Merge();
         }
 
         private Result<EntitlementProperties, Response> FindEntitlement(string entitlementId) =>

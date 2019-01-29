@@ -72,7 +72,7 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
             var builder = new ServerOptionBuilder(commandLine, _certificateStore);
 
             var resultCodeOrFailure = await builder.Build()
-                .Select(RunServer)
+                .OnOk(RunServer)
                 .AsTask().ConfigureAwait(false);
 
             return resultCodeOrFailure.LogIfFailed(_logger, ResultCodes.Failed);

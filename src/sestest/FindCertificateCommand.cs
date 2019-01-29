@@ -30,7 +30,7 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
 
             var resultCode = certificateStore
                 .FindByThumbprint("required", thumbprint)
-                .Select(ShowCertificate)
+                .OnOk(ShowCertificate)
                 .LogIfFailed(Logger, ResultCodes.Failed);
 
             return Task.FromResult(resultCode);

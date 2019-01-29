@@ -24,12 +24,10 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Server.RequestHandlers
         {
             var remoteIpAddress = httpContext.Connection.RemoteIpAddress;
 
-            return
-            (
-                from extracted in ExtractVerificationRequest(requestContext, remoteIpAddress)
-                from props in Verify(extracted.Request, extracted.Token)
-                select CreateSuccessResponse(props)
-            ).Merge();
+            return ExtractVerificationRequest(requestContext, remoteIpAddress)
+                .OnOk(extracted => Verify(extracted.Request, extracted.Token))
+                .OnOk(CreateSuccessResponse)
+                .Merge();
         }
 
         private Result<(TokenVerificationRequest Request, string Token), Response> ExtractVerificationRequest(
