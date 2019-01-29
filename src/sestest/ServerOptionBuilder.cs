@@ -36,21 +36,14 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
         /// <returns>Either a usable (and completely valid) <see cref="ServerOptions"/> or a set 
         /// of errors.</returns>
         public Result<ServerOptions, ErrorCollection> Build() =>
-            from url in ServerUrl()
-            join connCert in ConnectionCertificate() on true equals true
-            join signCert in SigningCertificate() on true equals true
-            join encryptCert in EncryptingCertificate() on true equals true
-            join audience in Audience() on true equals true
-            join issuer in Issuer() on true equals true
-            join exit in ExitAfterRequest() on true equals true
-            select new ServerOptions()
-                .WithServerUrl(url)
-                .WithConnectionCertificate(connCert)
-                .WithSigningCertificate(signCert)
-                .WithEncryptionCertificate(encryptCert)
-                .WithAudience(audience)
-                .WithIssuer(issuer)
-                .WithAutomaticExitAfterOneRequest(exit);
+            Result.FromOk(new ServerOptions())
+                .With(ServerUrl(), (options, serverUrl) => options.WithServerUrl(serverUrl))
+                .With(ConnectionCertificate(), (options, connCert) => options.WithConnectionCertificate(connCert))
+                .With(SigningCertificate(), (options, signCert) => options.WithSigningCertificate(signCert))
+                .With(EncryptingCertificate(), (options, encryptCert) => options.WithEncryptionCertificate(encryptCert))
+                .With(Audience(), (options, audience) => options.WithAudience(audience))
+                .With(Issuer(), (options, issuer) => options.WithIssuer(issuer))
+                .With(ExitAfterRequest(), (options, exit) => options.WithAutomaticExitAfterOneRequest(exit));
 
         /// <summary>
         /// Find the server URL for our hosting

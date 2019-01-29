@@ -23,16 +23,21 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Server.RequestHandlers
         {
             var entitlementId = requestContext.EntitlementId;
 
-            return
-            (
-                from duration in ParseDuration(requestContext.Body)
-                from foundEntitlement in FindEntitlement(entitlementId)
-                where NotReleased(foundEntitlement)
-                let renewalTime = DateTime.UtcNow
-                let expiry = renewalTime.Add(duration)
-                from renewedEntitlement in StoreRenewal(entitlementId, renewalTime)
-                select CreateSuccessResponse(expiry)
-            ).Merge();
+            return ParseDuration(requestContext.Body)
+                .OnOk(duration => FindEntitlement(entitlementId)
+                    .OnOk(CheckNotReleased)
+                    .OnOk(entitlement => new
+                    {
+                        Duration = duration,
+                        Entitlement = entitlement
+                    }))
+                .OnOk(x =>
+                {
+                    var renewalTime = DateTime.UtcNow;
+                    var expiry = renewalTime.Add(x.Duration);
+                    return StoreRenewal(entitlementId, renewalTime).OnOk(_ => CreateSuccessResponse(expiry));
+                })
+                .Merge();
         }
 
         private Result<TimeSpan, Response> ParseDuration(RenewRequestBody body) =>
@@ -44,9 +49,15 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Server.RequestHandlers
             _entitlementStore.FindEntitlement(entitlementId)
                 .OnError(errors => CreateNotFoundResponse(entitlementId));
 
-        private PredicateResult<Response> NotReleased(EntitlementProperties entitlementProperties) =>
-            entitlementProperties.IsReleased.AsPredicateFailure(
-                () => CreateAlreadyReleasedResponse(entitlementProperties.EntitlementId));
+        private Result<EntitlementProperties, Response> CheckNotReleased(EntitlementProperties entitlementProperties)
+        {
+            if (entitlementProperties.IsReleased)
+            {
+                return CreateAlreadyReleasedResponse(entitlementProperties.EntitlementId);
+            }
+
+            return entitlementProperties;
+        }
 
         private Result<EntitlementProperties, Response> StoreRenewal(string entitlementId, DateTime renewalTime) =>
             _entitlementStore.RenewEntitlement(entitlementId, renewalTime)

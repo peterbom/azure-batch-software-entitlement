@@ -46,10 +46,9 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
         /// error if it failed to validate correctly.
         /// </returns>
         public Result<EntitlementTokenProperties, ErrorCollection> Parse(string token) =>
-            from pair in ExtractJwt(token)
-            let provider = new JwtPropertyProvider(pair.Principal, pair.Token)
-            from entitlements in EntitlementTokenProperties.Build(provider)
-            select entitlements;
+            ExtractJwt(token)
+                .OnOk(pair => new JwtPropertyProvider(pair.Principal, pair.Token))
+                .OnOk(EntitlementTokenProperties.Build);
 
         private Result<(ClaimsPrincipal Principal, JwtSecurityToken Token), ErrorCollection> ExtractJwt(string tokenString)
         {

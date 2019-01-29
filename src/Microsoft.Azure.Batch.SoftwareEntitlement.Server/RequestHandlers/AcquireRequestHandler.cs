@@ -27,17 +27,27 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement.Server.RequestHandlers
         {
             var remoteIpAddress = httpContext.Connection.RemoteIpAddress;
 
-            return
-            (
-                from duration in ParseDuration(requestContext)
-                from extracted in ExtractVerificationRequest(requestContext, remoteIpAddress)
-                from tokenProperties in Verify(extracted.Request, extracted.Token)
-                let entitlementId = CreateEntitlementId()
-                let acquisitionTime = DateTime.UtcNow
-                let expiry = acquisitionTime.Add(duration)
-                let entitlementProperties = StoreEntitlement(entitlementId, tokenProperties, acquisitionTime)
-                select CreateSuccessResponse(entitlementId, expiry)
-            ).Merge();
+            return ParseDuration(requestContext)
+                .OnOk(duration => ExtractVerificationRequest(requestContext, remoteIpAddress).OnOk(extracted => new
+                {
+                    Duration = duration,
+                    Extracted = extracted
+                }))
+                .OnOk(x => Verify(x.Extracted.Request, x.Extracted.Token).OnOk(tokenProperties => new
+                {
+                    x.Duration,
+                    x.Extracted,
+                    TokenProperties = tokenProperties
+                }))
+                .OnOk(x =>
+                {
+                    var entitlementId = CreateEntitlementId();
+                    var acquisitionTime = DateTime.UtcNow;
+                    var expiry = acquisitionTime.Add(x.Duration);
+                    StoreEntitlement(entitlementId, x.TokenProperties, acquisitionTime);
+                    return CreateSuccessResponse(entitlementId, expiry);
+                })
+                .Merge();
         }
 
         private Result<TimeSpan, Response> ParseDuration(AcquireRequestBody body) =>

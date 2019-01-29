@@ -67,25 +67,16 @@ namespace Microsoft.Azure.Batch.SoftwareEntitlement
         }
 
         public static Result<EntitlementTokenProperties, ErrorCollection> Build(ITokenPropertyProvider provider) =>
-            from notBefore in provider.NotBefore()
-            join notAfter in provider.NotAfter() on true equals true
-            join issuedAt in provider.IssuedAt() on true equals true
-            join issuer in provider.Issuer() on true equals true
-            join audience in provider.Audience() on true equals true
-            join applicationIds in provider.ApplicationIds() on true equals true
-            join ipAddresses in provider.IpAddresses() on true equals true
-            join vmid in provider.VirtualMachineId() on true equals true
-            join tokenId in provider.TokenId() on true equals true
-            select new EntitlementTokenProperties()
-                .FromInstant(notBefore)
-                .UntilInstant(notAfter)
-                .WithIssuedAt(issuedAt)
-                .WithIssuer(issuer)
-                .WithAudience(audience)
-                .WithApplications(applicationIds)
-                .WithIpAddresses(ipAddresses)
-                .WithVirtualMachineId(vmid)
-                .WithIdentifier(tokenId);
+            Result.FromOk(new EntitlementTokenProperties())
+                .With(provider.NotBefore(), (props, notBefore) => props.FromInstant(notBefore))
+                .With(provider.NotAfter(), (props, notAfter) => props.UntilInstant(notAfter))
+                .With(provider.IssuedAt(), (props, issuedAt) => props.WithIssuedAt(issuedAt))
+                .With(provider.Issuer(), (props, issuer) => props.WithIssuer(issuer))
+                .With(provider.Audience(), (props, audience) => props.WithAudience(audience))
+                .With(provider.ApplicationIds(), (props, applicationIds) => props.WithApplications(applicationIds))
+                .With(provider.IpAddresses(), (props, ipAddresses) => props.WithIpAddresses(ipAddresses))
+                .With(provider.VirtualMachineId(), (props, vmid) => props.WithVirtualMachineId(vmid))
+                .With(provider.TokenId(), (props, tokenId) => props.WithIdentifier(tokenId));
 
         /// <summary>
         /// Specify the virtual machine Id of the machine
